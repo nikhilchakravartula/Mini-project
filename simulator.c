@@ -93,6 +93,7 @@ static void start_simulator(unsigned number_of_cpus)
     cpus_data[i].preemption_timer=-1;
 
     }
+    IRWL_INIT(student_lock);
 
     for(i=0;i<cpu_count;i++)
     {
@@ -225,10 +226,12 @@ void simulate_io()
             io_queue_tail=NULL;
         free(temp);
         pthread_mutex_unlock(&simulator_mutex);
+        IRWL_WRITER_LOCK(student_lock);
         wake_up(pcb);
+        IRWL_WRITER_UNLOCK(student_lock);
         pthread_mutex_lock(&simulator_mutex);
     }
-    else
+    else    
     {
         io_queue_head->execution_time-=1;
     }
@@ -267,18 +270,24 @@ void cpu_thread_function(unsigned cpu_id)
             break;
 
         case CPU_PREEMPT:
+            IRWL_WRITER_LOCK(student_lock);
             preempt(cpu_id);
+            IRWL_WRITER_UNLOCK(student_lock);
             break;
 
         case CPU_YIELD:
+            IRWL_WRITER_LOCK(student_lock);
             yield(cpu_id);
+            IRWL_WRITER_UNLOCK(student_lock);
             break;
 
         case CPU_TERMINATE:
             pthread_mutex_lock(&simulator_mutex);
             processes_terminated++;
             pthread_mutex_unlock(&simulator_mutex);
+            IRWL_WRITER_LOCK(student_lock);
             terminate(cpu_id);
+            IRWL_WRITER_UNLOCK(student_lock);
             break;
 
         case CPU_RUNNING:
