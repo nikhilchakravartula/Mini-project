@@ -27,8 +27,9 @@ typedef struct
 
 typedef struct _pcb_t
 {
-    process_state_t state;  
+     
     unsigned int pid;
+    process_state_t state;
     const int priority;
     const char* name;
     struct _pcb_t* next;
