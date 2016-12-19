@@ -12,9 +12,9 @@ TERMINATED
 } process_state_t;
 
 typedef enum{
-CPU=0,
-IO,
-TERMINATED
+OP_CPU=0,
+OP_IO,
+OP_TERMINATED
 
 } operation_type_t;
 
@@ -33,6 +33,9 @@ typedef struct _pcb_t
     const char* name;
     struct _pcb_t* next;
     op_t current_operation;
+    long int prev_cpu_id;
+    long int prev_cpu_group;
+    unsigned long v_runtime;
 
 }pcb_t;
 
