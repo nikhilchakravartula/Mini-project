@@ -3,11 +3,11 @@
 #define __SIMULATOR_H__
 
 typedef enum {
-NEW=0,
-READY,
-RUNNING,
-BLOCKED,
-TERMINATED
+PROCESS_NEW=0,
+PROCESS_READY,
+PROCESS_RUNNING,
+PROCESS_BLOCKED,
+PROCESS_TERMINATED
 
 } process_state_t;
 
@@ -27,16 +27,12 @@ typedef struct
 
 typedef struct _pcb_t
 {
-     
+    process_state_t state;  
     unsigned int pid;
-    process_state_t state;
     const int priority;
     const char* name;
     struct _pcb_t* next;
-    op_t current_operation;
-    long int prev_cpu_id;
-    long int prev_cpu_group;
-    unsigned long v_runtime;
+    op_t* current_operation;
 
 }pcb_t;
 
