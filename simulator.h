@@ -1,4 +1,4 @@
-#ifdef __SIMULATOR_H__
+#ifndef __SIMULATOR_H__
 
 #define __SIMULATOR_H__
 
@@ -25,15 +25,16 @@ typedef struct
     
 }op_t;
 
-typedef struct _pcb_t
+typedef struct
 {
-    process_state_t state;  
+   
     unsigned int pid;
+    process_state_t state;  
     const int priority;
     const char* name;
-    struct _pcb_t* next;
     op_t* current_operation;
     unsigned prev_cpu_id;
+    unsigned vruntime;
 
 }pcb_t;
 

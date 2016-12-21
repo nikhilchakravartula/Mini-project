@@ -4,12 +4,15 @@
 #define _XOPEN_SOURCE 500
 #endif /* __STDC_VERSION__ */
 
+#define _GNU_SOURCE
 
 #include<stdio.h>
 #include<stdlib.h>
 #include<time.h>
 #include "simulator.h"
-
+#include "process.c"
+#include"scheduler.h"
+#include"queue.h"
 
 typedef enum
 {
@@ -25,17 +28,17 @@ typedef struct
     pcb_t* current_pcb;
     cpu_state_t current_state;
     pthread_cond_t wakeup;
-    unsigned int idle_time;
-    unsigned int busy_time;
+   unsigned num_cpu_idle;
+ unsigned num_cpu_busy;
     int preemption_timer;
 
 }cpu_data_t;
 
-typedef struct _io_request_t
+ typedef struct _io_request_t
 {
     pcb_t* pcb;
     unsigned int execution_time;
-    _io_request_t* next;
+    struct _io_request_t* next;
 }io_request_t;
 
 static io_request_t * io_queue_head=NULL,*io_queue_tail=NULL;
@@ -43,6 +46,7 @@ static cpu_data_t* cpus_data;
 static pthread_t* cpu_threads;
 static pthread_mutex_t simulator_mutex;
 static unsigned ready_count=0,running_count=0,blocked_count=0,context_switches_count=0,cpu_count=0,processes_terminated_count=0;
+static unsigned int simulator_time=0,waiting_count=0;
 
 
 typedef struct {
@@ -81,10 +85,19 @@ static irwl student_lock;
 
 
 
+static void *simulator_thread_function(void *data);
+static void simulator_supervisor_thread();
+static void print_gantt_chart_header();
+static void print_gantt_chart_line();
+static void print_final_statistics(void);
+static void simulate_cpus();
+static void simulate_process(unsigned int n,pcb_t* pcb);
+static void submit_io_request(pcb_t * pcb);
+static void simulate_io();
+static void cpu_thread_function(unsigned cpu_id);
+static void simulate_create(void);
 
-
-
-static void start_simulator(unsigned number_of_cpus)
+extern void start_simulator(unsigned number_of_cpus)
 {
     int i;
     cpu_count=number_of_cpus;
@@ -95,8 +108,8 @@ static void start_simulator(unsigned number_of_cpus)
     cpus_data[i].current_pcb=NULL;
     cpus_data[i].current_state=CPU_IDLE;
     pthread_cond_init(&cpus_data[i].wakeup,NULL);
-    cpus_data[i].idle_time=0;
-    cpus_data[i].busy_time=0;
+    cpus_data[i].num_cpu_busy=0;
+    cpus_data[i].num_cpu_idle=0;
     cpus_data[i].preemption_timer=-1;
 
     }
@@ -134,6 +147,7 @@ static void simulator_supervisor_thread()
     }
 
 }
+
 static void simulate_cpus()
 {
     int i;
@@ -152,6 +166,7 @@ static void simulate_process(unsigned int n,pcb_t* pcb)
             if(pc->time>0)
             {
                 pc->time--;
+                pcb->vruntime++;
                 cpus_data[n].preemption_timer--;
                 if(cpus_data[n].preemption_timer==0)
                 {
@@ -200,7 +215,7 @@ static void simulate_process(unsigned int n,pcb_t* pcb)
 
 
 }
-void submit_io_request(pcb_t * pcb)
+static void submit_io_request(pcb_t * pcb)
 {
     io_request_t* new_io_request=malloc(sizeof(new_io_request));
     new_io_request->execution_time=pcb->current_operation->time;
@@ -217,7 +232,7 @@ void submit_io_request(pcb_t * pcb)
         io_queue_head=new_io_request;
     }
 }
-void simulate_io()
+static void simulate_io()
 {
     if(io_queue_head==NULL)
     return;
@@ -245,7 +260,7 @@ void simulate_io()
 
 
 }
-void cpu_thread_function(unsigned cpu_id)
+static void cpu_thread_function(unsigned cpu_id)
 {
 
         cpu_state_t state;
@@ -253,7 +268,7 @@ void cpu_thread_function(unsigned cpu_id)
     while (1)
     {
         pthread_mutex_lock(&simulator_mutex);
-        pthread_cond_signal(&simulator_cpu_data[cpu_id].wakeup);
+        pthread_cond_signal(&cpus_data[cpu_id].wakeup);
 
         if (cpus_data[cpu_id].current_pcb == NULL)
         {
@@ -288,9 +303,9 @@ void cpu_thread_function(unsigned cpu_id)
             IRWL_WRITER_UNLOCK(student_lock);
             break;
 
-        case CPU_TERMINATE:
+        case CPU_TERMINATED:
             pthread_mutex_lock(&simulator_mutex);
-            processes_terminated++;
+            processes_terminated_count++;
             pthread_mutex_unlock(&simulator_mutex);
             IRWL_WRITER_LOCK(student_lock);
             terminate(cpu_id);
@@ -302,7 +317,7 @@ void cpu_thread_function(unsigned cpu_id)
         }
     }
 }
-void print_gantt_chart_header()
+static void print_gantt_chart_header()
 {
     int n;
     printf("Time  Ru Re Wa     ");
@@ -316,29 +331,29 @@ void print_gantt_chart_header()
 }
 
 
-void print_gantt_chart_line()
+static void print_gantt_chart_line()
 {
-io_request *r;
+io_request_t *r;
     unsigned int current_ready = 0, current_running = 0, current_waiting = 0;
     int n;
     IRWL_READER_LOCK(student_lock)
     for (n=0; n<PROCESS_COUNT; n++)
     {
-        switch(processes[n].current_state)
+        switch(processes[n].state)
         {
         case PROCESS_READY:
             current_ready++;
-            ready_counter++;
+            ready_count++;
             break;
 
         case PROCESS_RUNNING:
             current_running++;
-            running_counter++;
+            running_count++;
             break;
 
-        case PROCESS_WAITING:
+        case PROCESS_BLOCKED:
             current_waiting++;
-            waiting_counter++;
+            waiting_count++;
             break;
 
         default:
@@ -351,9 +366,20 @@ io_request *r;
     for (n=0; n<cpu_count; n++)
     {
         if (cpus_data[n].current_pcb != NULL)
-            printf(" %-8s", cpus_data[n].current->name);
-        else
+        {
+            
+            printf(" %-8s", cpus_data[n].current_pcb->name);
+            pthread_mutex_unlock(&simulator_mutex);
+            cpus_data[n].num_cpu_busy++;
+            pthread_mutex_lock(&simulator_mutex);
+        }
+        else{
             printf(" (IDLE)  ");
+            pthread_mutex_unlock(&simulator_mutex);
+            cpus_data[n].num_cpu_idle++;
+            pthread_mutex_lock(&simulator_mutex);
+          
+        }
     }
     printf("     <");
     r = io_queue_head;
@@ -365,12 +391,30 @@ io_request *r;
     printf(" <\n");
 }
 
-static void print_final_stats(void)
+static void print_final_statistics(void)
 {
+    int i;
     printf("\n\n");
-    printf("# of Context Switches: %u\n", context_switches);
+    printf("# of Context Switches: %u\n", context_switches_count);
     printf("Total execution time: %.1f s\n", (float)simulator_time / 10.0);
-    printf("Total time spent in READY state: %.1f s\n", (float)ready_counter / 10.0);
+    printf("Total time spent in READY state: %.1f s\n", (float)ready_count / 10.0);
+    printf("Processor utilisation details: ");
+    for(i=0;i<cpu_count;i++)
+    {
+        printf("Core %d\t\t",i);
+
+    }
+    printf("\n\n======================================================================\n\n");
+    for(i=0;i<cpu_count;i++)
+    {
+        printf("IDLE: %d\t",cpus_data[i].num_cpu_idle);
+    }
+    printf("\n");
+    for(i=0;i<cpu_count;i++)
+    {
+        printf("BUSY: %d\t",cpus_data[i].num_cpu_busy);
+    }
+
 }
 
 extern void context_switch(unsigned int cpu_id, pcb_t *pcb,
@@ -379,8 +423,8 @@ extern void context_switch(unsigned int cpu_id, pcb_t *pcb,
     context_switches_count++;
     IRWL_WRITER_UNLOCK(student_lock);
     pthread_mutex_lock(&simulator_mutex);
-    simulator_cpu_data[cpu_id].current_pcb = pcb;
-    simulator_cpu_data[cpu_id].preemption_timer = preemption_time;
+    cpus_data[cpu_id].current_pcb = pcb;
+    cpus_data[cpu_id].preemption_timer = preemption_time;
     pthread_mutex_unlock(&simulator_mutex);
     IRWL_WRITER_LOCK(student_lock);
 }
@@ -389,17 +433,17 @@ extern void force_preempt(unsigned int cpu_id)
 {
     IRWL_WRITER_UNLOCK(student_lock);
     pthread_mutex_lock(&simulator_mutex);
-    if (simulator_cpu_data[cpu_id].current_state == CPU_RUNNING)
+    if (cpus_data[cpu_id].current_state == CPU_RUNNING)
     {
-        simulator_cpu_data[cpu_id].current_state = CPU_PREEMPT;
-        pthread_cond_signal(&simulator_cpu_data[cpu_id].wakeup);
-        pthread_cond_wait(&simulator_cpu_data[cpu_id].wakeup,&simulator_mutex);
+	cpus_data[cpu_id].current_state = CPU_PREEMPT;
+        pthread_cond_signal(&cpus_data[cpu_id].wakeup);
+        pthread_cond_wait(&cpus_data[cpu_id].wakeup,&simulator_mutex);
     }
     pthread_mutex_unlock(&simulator_mutex);
     IRWL_WRITER_LOCK(student_lock);
 }
 
-static void simulate_creat(void)
+static void simulate_create(void)
 {
     static int processes_created = 0;
 
