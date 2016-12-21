@@ -28,7 +28,7 @@ static int max_chunks;
 static int no_of_chunks[NOQ];
 static int size_of_chunk[NOQ];
 static int group_cores[NOC];
-
+static unsigned num_processes_in_ready;
 
 
 
@@ -36,9 +36,11 @@ static int group_cores[NOC];
 static void preempt(unsigned cpu_id)
 {
 pthread_mutex_lock(&ready_queue_mutex);
-pcb_t* pcb=//ready queue member of cpuid
+pcb_t* pcb=current[cpu_id];//ready queue member of cpuid
 pcb->state=PROCESS_READY;
 //ADDTOTHEREADYQUEUE(cpu_id);
+num_processes_in_ready+=1;
+placeInQueue(pcb);
 schedule(cpu_id);
 pthread_mutex_unlock(&ready_queue_mutex);
 }
@@ -47,7 +49,7 @@ pthread_mutex_unlock(&ready_queue_mutex);
 static void idle(unsigned cpu_id)
 {
 pthread_mutex_lock(&ready_queue_mutex);
-while(HEADOFTHEREADYQUEUE ==NULL)
+while( num_processes_in_ready==0)
 pthread_cond_wait(&cpu_not_idle,&ready_queue_mutex);
 schedule(cpu_id);
 pthread_mutex_unlock(&ready_queue_mutex);
@@ -57,7 +59,7 @@ pthread_mutex_unlock(&ready_queue_mutex);
 static void yield(unsigned cpu_id)
 {
     pthread_mutex_lock(&ready_queue_mutex);
-pcb_t* pcb=//ready queue member of cpuid
+pcb_t* pcb=current[cpu_id];//ready queue member of cpuid
 pcb->state=PROCESS_BLOCKED;
 schedule(cpu_id);
 pthread_mutex_unlock(&ready_queue_mutex);
@@ -238,12 +240,17 @@ static void schedule_next_process()
      printf("\nScheduling Done.....\n");*/
 }
 
-static void wake_up(pcb_t *process)
+static void wake_up(pcb_t *pcb)
 {
     pthread_mutex_lock(&ready_queue_mutex);
-     process->state = PROCESS_READY;
-     if(!placeInQueue(process))
-        exit(1);
+     pcb->state = PROCESS_READY;
+   /*  if(!placeInQueue(process))
+        exit(1);     MODIFIED THIS*/
+
+
+
+        placeInQueue(pcb);
+        num_processes_in_ready+=1;
     pthread_mutex_unlock(&ready_queue_mutex);
 }
 
