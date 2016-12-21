@@ -39,7 +39,7 @@ void print_disks()
     }
 }
 
-void initialise_queue(struct queue** queue)
+void initialise_ready_and_run_queue()
 {
    int i;
    max_chunks = 12;
@@ -50,7 +50,7 @@ void initialise_queue(struct queue** queue)
    for(i=0;i<NOQ;i++)
    {
      pthread_mutex_lock(&disk_mutex);
-     disks_queue[i] = queue[i];
+     disks_queue[i] = createQueue();
      pthread_mutex_unlock(&disk_mutex);
    }
    for(i=0;i<NOC;i++){
@@ -245,3 +245,5 @@ static void schedule(unsigned int cpu_id);
        context_switch(cpu_id,p,TIME_SLICE);
      }
 }
+
+

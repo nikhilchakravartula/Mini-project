@@ -33,6 +33,7 @@ typedef struct _pcb_t
     const char* name;
     struct _pcb_t* next;
     op_t* current_operation;
+    unsigned prev_cpu_id;
 
 }pcb_t;
 

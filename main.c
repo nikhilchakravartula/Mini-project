@@ -8,7 +8,7 @@ int main()
   pcb_t proc[N];
   int i;
   srand(time(NULL));
-  for(i=0;i<N;i++){
+ /* for(i=0;i<N;i++){
      proc[i].pid = i+1;
      proc[i].priority = (unsigned int)rand()%20;
      proc[i].cpu_id = -1;
@@ -21,13 +21,14 @@ int main()
   struct Queue* queue[NOQ];
   for(i=0;i<NOQ;i++)
         queue[i] = createQueue();
+        
 
   for(i=0;i<N;i++)
     printf("%d\t%d\n",proc[i].pid,proc[i].priority);
 
   printf("\n\n\n");
-
-  initialise_queue(queue);
+*/
+  initialise_disks_queue();
 
   for(i=0;i<N;i++)
     wake_up(&proc[i]);
