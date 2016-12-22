@@ -22,7 +22,7 @@
 #define CACHE_MISS_RATE 20
 #define MEMORY_ACCESS_TIME 100
 #define LEVEL1_MIG_COST (CACHE_HIT_RATE/100.0)*(CACHE_LEVEL1_ACCESS_TIME) +(CACHE_MISS_RATE/100.0)*(CACHE_LEVEL2_ACCESS_TIME)
-#define LEVEL2_MIG_COST (CACHE_HIT_RATE/100)*(CACHE_LEVEL2_ACCESS_TIME) +(CACHE_MISS_RATE/100)**(MEMORY_ACCESS_TIME) 
+#define LEVEL2_MIG_COST (CACHE_HIT_RATE/100.0)*(CACHE_LEVEL2_ACCESS_TIME) +(CACHE_MISS_RATE/100.0)*(MEMORY_ACCESS_TIME) 
 
 static pthread_mutex_t ready_queue_mutex;
 static pthread_cond_t cpu_not_idle;
@@ -215,7 +215,7 @@ static void schedule_next_process()
 {
    int i,j;
    //print_disks();
-   int flag=0;
+ 
       while(true){
 
        for(i=0;i<NOQ;i++)
@@ -230,16 +230,16 @@ static void schedule_next_process()
               struct QNode* node = deQueue(ready_queue[i]);
               if(node==NULL)
                 break;
-              flag++;
+              
                pcb_t* pcb = node->key;
               pthread_mutex_lock(&run_mutex);
               dispatch_process(pcb);
+              num_processes_in_ready--;
               pthread_mutex_unlock(&run_mutex);
           }
           pthread_mutex_unlock(&ready_queue_mutex);
        }
-       if(flag==20)
-            break;
+       
       }
 
     /*  for(i=0;i<NOC;i++)
