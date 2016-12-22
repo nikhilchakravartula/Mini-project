@@ -6,7 +6,6 @@
 #include "simulator.h"
 #include <stdbool.h>
 #include <limits.h>
-#include "queue.c"
 #define NOQ 3
 #define NOC 4
 #define HIGH_LOWER 0
@@ -15,7 +14,6 @@
 #define MEDIUM_UPPER 14
 #define LOW_LOWER 15
 #define LOW_UPPER 19
-#define TIME_SLICE 4
 #define CACHE_LEVEL1_ACCESS_TIME 1
 #define CACHE_LEVEL2_ACCESS_TIME 4
 #define CACHE_HIT_RATE 80
@@ -23,7 +21,7 @@
 #define MEMORY_ACCESS_TIME 100
 #define LEVEL1_MIG_COST (CACHE_HIT_RATE/100.0)*(CACHE_LEVEL1_ACCESS_TIME) +(CACHE_MISS_RATE/100.0)*(CACHE_LEVEL2_ACCESS_TIME)
 #define LEVEL2_MIG_COST (CACHE_HIT_RATE/100.0)*(CACHE_LEVEL2_ACCESS_TIME) +(CACHE_MISS_RATE/100.0)*(MEMORY_ACCESS_TIME) 
-
+//static unsigned NOC;
 static pthread_mutex_t ready_queue_mutex;
 static pthread_cond_t cpu_not_idle;
 static pthread_mutex_t run_mutex;
@@ -37,11 +35,199 @@ static int size_of_chunk[NOQ];
 static int group_cores[NOC];
 static unsigned num_processes_in_ready;
 static unsigned migration_cost;
-
+static unsigned optimum_core_load=0; 
+static unsigned TIME_SLICE=-1;
 static bool placeInQueue( pcb_t *pcb);
 static void schedule(unsigned int cpu_id);
 static unsigned int get_group_id(unsigned int cpu_id);
+/*============================================================================*/
 
+struct QNode
+{
+     pcb_t *key;
+    struct QNode *next,*prev;
+};
+
+struct Queue
+{
+    struct QNode *front, *rear;
+    int length;
+};
+
+extern void printQueue(struct Queue *q);
+extern  struct QNode* newNode( pcb_t* k);
+extern struct Queue *createQueue();
+extern void enQueue(struct Queue *q, pcb_t* k);
+extern struct QNode *deQueueAtRear(struct Queue *q);
+extern struct QNode *deQueueAtFront(struct Queue *q);
+extern void sorted_enqueue(struct Queue *q, pcb_t *p);
+
+
+
+
+extern void printQueue(struct Queue *q)
+{
+  struct QNode* temp = q->front;
+  if(temp==NULL)
+    return;
+
+  printf("Length is:%d\n",q->length);
+  /*while(temp!=q->rear)
+  {
+     printf("%d\t%d\t%d\t%d\n",temp->key->pid,temp->key->priority,temp->key->cpu_id,temp->key->vruntime);
+     temp = temp->next;
+  }
+  printf("%d\t%d\t%d\t%d\n",temp->key->pid,temp->key->priority,temp->key->cpu_id,temp->key->vruntime);
+*/
+}
+
+extern struct QNode* newNode(pcb_t *p)
+{
+    struct QNode *temp = (struct QNode*)malloc(sizeof(struct QNode));
+    temp->key = p;
+    temp->next = NULL;
+    temp->prev = NULL;
+    return temp;
+}
+
+extern struct Queue *createQueue()
+{
+    struct Queue *q = (struct Queue*)malloc(sizeof(struct Queue));
+    q->front = q->rear = NULL;
+    q->length = 0;
+    return q;
+}
+
+extern void enQueue(struct Queue *q, pcb_t* p)
+{
+    struct QNode *temp = newNode(p);
+    if (q->rear == NULL)
+    {
+       q->front = q->rear = temp;
+       q->length++;
+       return;
+    }
+    q->rear->next = temp;
+    temp->prev = q->rear;
+    q->rear = temp;
+    q->length++;
+}
+
+extern struct QNode *deQueueAtFront(struct Queue *q)
+{
+    if (q->front == NULL)
+       return NULL;
+    struct QNode *temp = q->front;
+    q->front = temp->next;
+    if(q->front!=NULL)
+        q->front->prev = NULL;
+    if(q->front == NULL)
+       q->rear = NULL;
+    q->length--;
+    return temp;
+}
+
+extern struct QNode *deQueueAtRear(struct Queue *q){
+    if(q->front == NULL)
+        return NULL;
+    struct QNode *temp = q->rear;
+    q->rear = temp->prev;
+    if(q->rear != NULL)
+        q->rear->next = NULL;
+    if(q->rear == NULL)
+        q->front = NULL;
+    q->length--;
+    return temp;
+}
+
+extern void sorted_enqueue(struct Queue *q, pcb_t *p){
+    struct QNode *temp, *prv, *n;
+    n =newNode(p);
+ 
+    if(q->front == NULL){
+        q->front = q->rear = n;
+        q->length++;
+        return;
+    }
+    temp = q->front;
+    while(temp!=q->rear){
+        if(temp->key->vruntime > p->vruntime)
+            break;
+        temp = temp->next;
+    }
+    if(temp == q->front){
+        if(temp->key->vruntime > p->vruntime){
+            temp->prev = n;
+            n->next = temp;
+            q->front = n;
+            q->length++;
+        }
+        else{
+            prv = temp->next;
+            temp->next = n;
+            n->prev = temp;
+            if(temp == q->rear){
+                q->rear = n;
+            }
+            else{
+                prv->prev = n;
+                n->next = prv;
+            }
+            q->length++;
+        }
+    }
+    else if(temp == q->rear){
+        if(q->rear->key->vruntime > p->vruntime){
+            prv = temp->prev;
+            prv->next = n;
+            n->prev = prv;
+            n->next = q->rear;
+            q->rear->prev = n;
+        }
+        else{
+            q->rear->next = n;
+            n->prev = q->rear;
+            q->rear = n;
+        }
+        q->length++;
+    }/*
+    else if(temp == NULL){
+        q->rear->next = n;
+        n->prev = q->rear;
+        q->rear = n;
+        q->length++;
+    }*/
+    else if(temp!=NULL){
+        prv = temp->prev;
+        prv->next = n;
+        n->prev = prv;
+        n->next = temp;
+        temp->prev = n;
+        q->length++;
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*======================================================================*/
 
 extern void preempt(unsigned cpu_id)
 {
@@ -200,7 +386,7 @@ static void dispatch_process( pcb_t *pcb)
 
     pcb->prev_cpu_id = core;
    pthread_mutex_lock(&run_mutex);
-    enQueue(run_queue[core],pcb);
+    sorted_enqueue(run_queue[core],pcb);
     pthread_mutex_unlock(&run_mutex);
 }
 
@@ -227,7 +413,7 @@ static void schedule_next_process()
             size_of_chunk[i]=1;
           for(j=0;j<size_of_chunk[i];j++)
           {
-              struct QNode* node = deQueue(ready_queue[i]);
+              struct QNode* node = deQueueAtFront(ready_queue[i]);
               if(node==NULL)
                 break;
               
@@ -272,7 +458,7 @@ extern  void schedule(unsigned int cpu_id)
     int group;
     int highest_utilized_core = INT_MIN;
     int highest_length = INT_MIN;
-    struct QNode* node = deQueue(run_queue[cpu_id]);
+    struct QNode* node = deQueueAtRear(run_queue[cpu_id]);
 
     if(node!=NULL){
      pcb= node->key;
@@ -289,8 +475,8 @@ extern  void schedule(unsigned int cpu_id)
         }
       }
       //WHAT IF NODE IS NULL HERE
-      node = deQueue(run_queue[highest_utilized_core]);
-      assert(node!=NULL);
+      node = deQueueAtFront(run_queue[highest_utilized_core]);
+      if(node!=NULL)
       pcb = node->key;
 
     }
@@ -305,9 +491,10 @@ extern  void schedule(unsigned int cpu_id)
         }
 
       }
-      node = deQueue(run_queue[highest_utilized_core]);
+      node = deQueueAtFront(run_queue[highest_utilized_core]);
       //WHAT IF NODE IS NULL HERE
-      assert(node!=NULL);
+      
+      if(node!=NULL)
       pcb = node->key;
     }
 
@@ -324,16 +511,23 @@ extern  void schedule(unsigned int cpu_id)
 int main(int argc,char** argv)
 {
 
-int argc=
+//NOC=atoi(argv[1]);
 int i;
-    unsigned num_cpus=atoi(argv[1]);
+if(argc<2)
+{
+  
+  printf("WHAT HAVE YOU GIVEN ME\t EXPECTING SOME OTHER THING :P");
+  exit(0);
+}
+TIME_SLICE=atoi(argv[2]);
     pthread_mutex_init(&ready_queue_mutex,NULL);
     pthread_cond_init(&cpu_not_idle,NULL);
     initialise_ready_and_run_queue();
     migration_cost=0;
+    optimum_core_load=100/NOC;
   
 
 
-    start_simulator(num_cpus);
+    start_simulator(NOC);
 
 }

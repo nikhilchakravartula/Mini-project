@@ -1,11 +1,12 @@
+
 #include <stdlib.h>
 #include <stdio.h>
 #include "simulator.h"
-
+#include "queue.h"
 struct QNode
 {
      pcb_t *key;
-    struct QNode *next;
+    struct QNode *next,*prev;
 };
 
 struct Queue
@@ -25,22 +26,23 @@ extern void sorted_enqueue(struct Queue *q, pcb_t *p);
 
 
 
-void printQueue(struct Queue *q)
+extern void printQueue(struct Queue *q)
 {
   struct QNode* temp = q->front;
   if(temp==NULL)
     return;
 
   printf("Length is:%d\n",q->length);
-  while(temp!=q->rear)
+  /*while(temp!=q->rear)
   {
      printf("%d\t%d\t%d\t%d\n",temp->key->pid,temp->key->priority,temp->key->cpu_id,temp->key->vruntime);
      temp = temp->next;
   }
   printf("%d\t%d\t%d\t%d\n",temp->key->pid,temp->key->priority,temp->key->cpu_id,temp->key->vruntime);
+*/
 }
 
-struct QNode* newNode(pcb_t *p)
+extern struct QNode* newNode(pcb_t *p)
 {
     struct QNode *temp = (struct QNode*)malloc(sizeof(struct QNode));
     temp->key = p;
@@ -49,7 +51,7 @@ struct QNode* newNode(pcb_t *p)
     return temp;
 }
 
-struct Queue *createQueue()
+extern struct Queue *createQueue()
 {
     struct Queue *q = (struct Queue*)malloc(sizeof(struct Queue));
     q->front = q->rear = NULL;
@@ -57,7 +59,7 @@ struct Queue *createQueue()
     return q;
 }
 
-void enQueue(struct Queue *q, pcb_t* p)
+extern void enQueue(struct Queue *q, pcb_t* p)
 {
     struct QNode *temp = newNode(p);
     if (q->rear == NULL)
@@ -72,7 +74,7 @@ void enQueue(struct Queue *q, pcb_t* p)
     q->length++;
 }
 
-struct QNode *deQueueAtFront(struct Queue *q)
+extern struct QNode *deQueueAtFront(struct Queue *q)
 {
     if (q->front == NULL)
        return NULL;
@@ -86,7 +88,7 @@ struct QNode *deQueueAtFront(struct Queue *q)
     return temp;
 }
 
-struct QNode *deQueueAtRear(struct Queue *q){
+extern struct QNode *deQueueAtRear(struct Queue *q){
     if(q->front == NULL)
         return NULL;
     struct QNode *temp = q->rear;
@@ -99,7 +101,7 @@ struct QNode *deQueueAtRear(struct Queue *q){
     return temp;
 }
 
-void sorted_enqueue(struct Queue *q, pcb_t *p){
+extern void sorted_enqueue(struct Queue *q, pcb_t *p){
     struct QNode *temp, *prv, *n;
     n = (struct QNode*)malloc(sizeof(struct QNode));
     n->key = p;
@@ -165,3 +167,4 @@ void sorted_enqueue(struct Queue *q, pcb_t *p){
         q->length++;
     }
 }
+
