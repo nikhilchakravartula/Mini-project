@@ -4,7 +4,7 @@ obj=scheduler.o simulator.o process.o
 inc=scheduler.h simulator.h process.h
 misc=Makefile
 target=simulator
-cflags=-Wall -g -O0 -Werror -pedantic -ansi
+cflags=-Wall -std=c89 -g -O0 -Werror -pedantic -ansi
 lflags=-lpthread
 
 all: $(target)
