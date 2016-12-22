@@ -1,6 +1,4 @@
 # Makefile
-# CS 2200 PRJ6
-
 src=scheduler.c simulator.c process.c
 obj=scheduler.o simulator.o process.o
 inc=scheduler.h simulator.h process.h
