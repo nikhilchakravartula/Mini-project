@@ -10,7 +10,7 @@
 #include<stdlib.h>
 #include<time.h>
 #include "simulator.h"
-#include "process.c"
+#include "process.h"
 #include"scheduler.h"
 #include<assert.h>
 #include"queue.h"
