@@ -49,8 +49,8 @@ pthread_mutex_lock(&ready_queue_mutex);
  pcb_t* pcb=current[cpu_id];//ready queue member of cpuid
 pcb->state=PROCESS_READY;
 //ADDTOTHEREADYQUEUE(cpu_id);
-num_processes_in_ready+=1;
 placeInQueue(pcb);
+num_processes_in_ready+=1;
 schedule(cpu_id);
 pthread_mutex_unlock(&ready_queue_mutex);
 }
@@ -290,6 +290,7 @@ extern  void schedule(unsigned int cpu_id)
       }
       //WHAT IF NODE IS NULL HERE
       node = deQueue(run_queue[highest_utilized_core]);
+      assert(node!=NULL);
       pcb = node->key;
 
     }
@@ -306,6 +307,7 @@ extern  void schedule(unsigned int cpu_id)
       }
       node = deQueue(run_queue[highest_utilized_core]);
       //WHAT IF NODE IS NULL HERE
+      assert(node!=NULL);
       pcb = node->key;
     }
 
@@ -322,6 +324,7 @@ extern  void schedule(unsigned int cpu_id)
 int main(int argc,char** argv)
 {
 
+int argc=
 int i;
     unsigned num_cpus=atoi(argv[1]);
     pthread_mutex_init(&ready_queue_mutex,NULL);
