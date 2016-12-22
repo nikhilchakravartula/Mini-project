@@ -1,7 +1,7 @@
 
 
 #include "simulator.h"
-#include<math.h>
+#include"process.h"
 #define priority(i) 20
 #define PROCESS_COUNT 8
 
@@ -216,7 +216,7 @@ static op_t pid7_ops[] = {
     { OP_TERMINATED, 0 }
 };
 
-static pcb_t processes[PROCESS_COUNT] = {
+ pcb_t processes[PROCESS_COUNT] = {
     { 0,PROCESS_NEW, priority(1),"Process1",pid0_ops,-1,0},
 	{ 1,PROCESS_NEW, priority(1),"Process2",pid1_ops,-1,0},
 	{ 2,PROCESS_NEW, priority(1),"Process3",pid2_ops,-1,0},
