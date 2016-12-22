@@ -3,7 +3,7 @@
 
 src=scheduler.c simulator.c process.c
 obj=scheduler.o simulator.o process.o
-inc=simulator.h process.h
+inc=scheduler.h simulator.h process.h
 misc=Makefile
 target=simulator
 cflags=-Wall -g -O0 -Werror -pedantic -ansi
@@ -19,3 +19,4 @@ $(target) : $(obj) $(misc)
 
 clean:
 	rm -f $(obj) $(target)
+
