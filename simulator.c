@@ -13,6 +13,7 @@
 #include "process.h"
 #include"scheduler.h"
 #include<assert.h>
+#include<pthread.h>
 
 typedef enum
 {
