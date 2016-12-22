@@ -13,7 +13,6 @@
 #include "process.h"
 #include"scheduler.h"
 #include<assert.h>
-#include"queue.h"
 
 typedef enum
 {
