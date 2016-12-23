@@ -21,7 +21,7 @@
 #define MEMORY_ACCESS_TIME 100
 #define LEVEL1_MIG_COST (CACHE_HIT_RATE/100.0)*(CACHE_LEVEL1_ACCESS_TIME) +(CACHE_MISS_RATE/100.0)*(CACHE_LEVEL2_ACCESS_TIME)
 #define LEVEL2_MIG_COST (CACHE_HIT_RATE/100.0)*(CACHE_LEVEL2_ACCESS_TIME) +(CACHE_MISS_RATE/100.0)*(MEMORY_ACCESS_TIME) 
-//static unsigned NOC;
+/*static unsigned NOC;*/
 static pthread_mutex_t ready_queue_mutex;
 static pthread_cond_t cpu_not_idle;
 static pthread_mutex_t run_mutex;
@@ -35,7 +35,7 @@ static int size_of_chunk[NOQ];
 static int group_cores[NOC];
 static unsigned num_processes_in_ready;
 static unsigned migration_cost;
-static unsigned optimum_core_load=0; 
+static double optimum_core_load=0; 
 static unsigned TIME_SLICE=-1;
 static bool placeInQueue( pcb_t *pcb);
 static void schedule(unsigned int cpu_id);
@@ -232,9 +232,9 @@ extern void sorted_enqueue(struct Queue *q, pcb_t *p){
 extern void preempt(unsigned cpu_id)
 {
 pthread_mutex_lock(&ready_queue_mutex);
- pcb_t* pcb=current[cpu_id];//ready queue member of cpuid
+ pcb_t* pcb=current[cpu_id];/*ready queue member of cpuid*/
 pcb->state=PROCESS_READY;
-//ADDTOTHEREADYQUEUE(cpu_id);
+/*ADDTOTHEREADYQUEUE(cpu_id);*/
 placeInQueue(pcb);
 num_processes_in_ready+=1;
 schedule(cpu_id);
@@ -255,7 +255,7 @@ pthread_mutex_unlock(&ready_queue_mutex);
 extern void yield(unsigned cpu_id)
 {
     pthread_mutex_lock(&ready_queue_mutex);
-  pcb_t* pcb=current[cpu_id];//ready queue member of cpuid
+  pcb_t* pcb=current[cpu_id];/*ready queue member of cpuid*/
 pcb->state=PROCESS_BLOCKED;
 schedule(cpu_id);
 pthread_mutex_unlock(&ready_queue_mutex);
@@ -266,7 +266,7 @@ pthread_mutex_unlock(&ready_queue_mutex);
 extern  void terminate(unsigned cpu_id)
 {
 pthread_mutex_lock(&ready_queue_mutex);
- pcb_t* pcb=current[cpu_id];//ready queue member of cpuid
+ pcb_t* pcb=current[cpu_id];/*ready queue member of cpuid*/
 pcb->state=PROCESS_TERMINATED;
 schedule(cpu_id);
 pthread_mutex_unlock(&ready_queue_mutex);
@@ -322,7 +322,7 @@ static bool placeInQueue( pcb_t *pcb)
   }
 
 
-//WHAT THE FUCK IS THIS!!!
+/*WHAT THE FUCK IS THIS!!!*/
 
 static int find_idlest_core_group(const int group_id)
 {
@@ -331,46 +331,71 @@ static int find_idlest_core_group(const int group_id)
     int smallCore = INT_MAX;
     for(i=0;i<NOC;i++)
     {
-       pthread_mutex_lock(&run_mutex);
+       /*pthread_mutex_lock(&run_mutex);*/
        if(group_cores[i]==group_id&&smallLength>run_queue[i]->length)
        {
          smallCore=i;
          smallLength=run_queue[i]->length;
        }
-       pthread_mutex_unlock(&run_mutex);
+       /*pthread_mutex_unlock(&run_mutex);*/
     }
     return smallCore;
 }
 
 
+static int calculate_overall_load(){
+    
+}
+
 
 static int find_idlest_core(unsigned int flag)
 {
-  //MAKE TRADE OFF IN THIS FUNCTION
+  /*MAKE TRADE OFF IN THIS FUNCTION*/
      int core;
-    
+     int core1, core2;
+     int i;
+     int leastLength = INT_MAX;
+     int leastCore = INT_MAX;
      if(flag==0)
      {
-       int i;
-       int leastLength = INT_MAX;
-       int leastCore = INT_MAX;
+       /*pthread_mutex_lock(&run_mutex);*/
        for(i=0;i<NOC;i++)
        {
-         
-         pthread_mutex_lock(&run_mutex);
           if(leastLength>run_queue[i]->length){
             leastCore = i;
             leastLength = run_queue[i]->length;
           }
-         pthread_mutex_unlock(&run_mutex);
        }
-       core = leastCore;
+       /*pthread_mutex_unlock(&run_mutex);*/
      }
      else
      {
-       //MAKE TRADE OFF HERE ... IF LOAD IS GREATER THAN waht it should be migrate it to other core
+       /*MAKE TRADE OFF HERE ... IF LOAD IS GREATER THAN waht it should be migrate it to other core*/
         int group_id = get_group_id(flag);
-        core = find_idlest_core_group(group_id);
+        core1 = find_idlest_core_group(group_id);
+        int total_length = 0;
+        for(i=0; i<NOC; i++)
+            total_length += run_queue[i]->length;
+        if(((run_queue[core1]+1)*10)/(total_length+1) > optimum_core_load){
+            leastLength = INT_MAX;
+            leastCore = INT_MAX;
+            /*pthread_mutex_lock(&run_mutex);*/
+            for(i=0;i<NOC;i++)
+            {
+                if(leastLength>run_queue[i]->length){
+                    leastCore = i;
+                    leastLength = run_queue[i]->length;
+                }
+            }
+            /*pthread_mutex_unlock(&run_mutex);*/
+            core2 = leastCore;
+            if(((run_queue[core2]+1)*10)/(total_length+1) > optimum_core_load*0.5)
+                core = core2;
+            else
+                core = core1;
+        }
+        else
+            core = core1;
      }
      return core;
 }
@@ -385,9 +410,9 @@ static void dispatch_process( pcb_t *pcb)
         core = find_idlest_core(pcb->prev_cpu_id);
 
     pcb->prev_cpu_id = core;
-   pthread_mutex_lock(&run_mutex);
+    /*pthread_mutex_lock(&run_mutex);*/
     sorted_enqueue(run_queue[core],pcb);
-    pthread_mutex_unlock(&run_mutex);
+    /*pthread_mutex_unlock(&run_mutex);*/
 }
 
 
@@ -400,7 +425,6 @@ static unsigned int get_group_id(unsigned int cpu_id)
 static void schedule_next_process()
 {
    int i,j;
-   //print_disks();
  
       while(true){
 
@@ -417,7 +441,7 @@ static void schedule_next_process()
               if(node==NULL)
                 break;
               
-               pcb_t* pcb = node->key;
+              pcb_t* pcb = node->key;
               pthread_mutex_lock(&run_mutex);
               dispatch_process(pcb);
               num_processes_in_ready--;
@@ -474,7 +498,7 @@ extern  void schedule(unsigned int cpu_id)
             highest_length = run_queue[i]->length;
         }
       }
-      //WHAT IF NODE IS NULL HERE
+      /*WHAT IF NODE IS NULL HERE*/
       node = deQueueAtFront(run_queue[highest_utilized_core]);
       if(node!=NULL)
       pcb = node->key;
@@ -492,7 +516,7 @@ extern  void schedule(unsigned int cpu_id)
 
       }
       node = deQueueAtFront(run_queue[highest_utilized_core]);
-      //WHAT IF NODE IS NULL HERE
+      /*WHAT IF NODE IS NULL HERE*/
       
       if(node!=NULL)
       pcb = node->key;
@@ -510,24 +534,22 @@ extern  void schedule(unsigned int cpu_id)
 
 int main(int argc,char** argv)
 {
-
-//NOC=atoi(argv[1]);
-int i;
-if(argc<2)
-{
-  
-  printf("WHAT HAVE YOU GIVEN ME\t EXPECTING SOME OTHER THING :P");
-  exit(0);
-}
-TIME_SLICE=atoi(argv[2]);
+    /*NOC=atoi(argv[1]);*/
+    int i;
+    pthread_t sch;
+    if(argc<2)
+    {
+    
+    printf("WHAT HAVE YOU GIVEN ME\t EXPECTING SOME OTHER THING :P");
+    exit(0);
+    }
+    TIME_SLICE=atoi(argv[2]);
     pthread_mutex_init(&ready_queue_mutex,NULL);
     pthread_cond_init(&cpu_not_idle,NULL);
     initialise_ready_and_run_queue();
     migration_cost=0;
-    optimum_core_load=100/NOC;
-  
-
-
+    optimum_core_load=100.0/NOC;
+    pthread_start(sch, NULL, schedule_next_process, NULL);
     start_simulator(NOC);
 
 }
