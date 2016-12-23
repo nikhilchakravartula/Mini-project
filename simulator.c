@@ -10,9 +10,10 @@
 #include<stdlib.h>
 #include<time.h>
 #include "simulator.h"
-#include "process.c"
+#include "process.h"
 #include"scheduler.h"
-#include"queue.h"
+#include<assert.h>
+#include<pthread.h>
 
 typedef enum
 {
@@ -101,8 +102,12 @@ extern void start_simulator(unsigned number_of_cpus)
 {
     int i;
     cpu_count=number_of_cpus;
-    cpus_data=malloc(sizeof(cpus_data)*cpu_count);
-    cpu_threads=malloc(sizeof(cpu_threads)*cpu_count);
+    cpus_data=malloc(sizeof(cpu_data_t)*cpu_count);
+    assert(cpus_data!=NULL);
+    cpu_threads=malloc(sizeof(pthread_t)*cpu_count);
+   assert(cpu_threads!=NULL);
+   simulator_time=0;
+   pthread_mutex_init(&simulator_mutex,NULL);
     for(i=0;i<cpu_count;i++)
     {
     cpus_data[i].current_pcb=NULL;
@@ -218,6 +223,7 @@ static void simulate_process(unsigned int n,pcb_t* pcb)
 static void submit_io_request(pcb_t * pcb)
 {
     io_request_t* new_io_request=malloc(sizeof(new_io_request));
+    assert(new_io_request!=NULL);
     new_io_request->execution_time=pcb->current_operation->time;
     new_io_request->pcb=pcb;
     new_io_request->next=NULL;
@@ -420,6 +426,9 @@ static void print_final_statistics(void)
 extern void context_switch(unsigned int cpu_id, pcb_t *pcb,
                            int preemption_time)
 {
+      assert(cpu_id < cpu_count);
+    assert(pcb == NULL || (pcb >= processes && pcb <= processes +
+        PROCESS_COUNT - 1));
     context_switches_count++;
     IRWL_WRITER_UNLOCK(student_lock);
     pthread_mutex_lock(&simulator_mutex);
@@ -431,6 +440,7 @@ extern void context_switch(unsigned int cpu_id, pcb_t *pcb,
 
 extern void force_preempt(unsigned int cpu_id)
 {
+    assert(cpu_id<cpu_count);
     IRWL_WRITER_UNLOCK(student_lock);
     pthread_mutex_lock(&simulator_mutex);
     if (cpus_data[cpu_id].current_state == CPU_RUNNING)
