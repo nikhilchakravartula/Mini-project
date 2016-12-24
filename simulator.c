@@ -46,7 +46,7 @@ static io_request_t * io_queue_head=NULL,*io_queue_tail=NULL;
 static cpu_data_t* cpus_data;
 static pthread_t* cpu_threads;
 static pthread_mutex_t simulator_mutex;
-static unsigned ready_count=0,running_count=0,blocked_count=0,context_switches_count=0,cpu_count=0,processes_terminated_count=0;
+static unsigned ready_count=0,running_count=0,context_switches_count=0,cpu_count=0,processes_terminated_count=0;
 static unsigned int simulator_time=0,waiting_count=0;
 
 
@@ -190,7 +190,7 @@ static void simulate_process(unsigned int n,pcb_t* pcb)
                     break;
 
                     case OP_IO:
-                    // can suggest optimisation here
+/*                    // can suggest optimisation here*/
                     submit_io_request(pcb);
                     cpus_data[n].current_state=CPU_YIELD;
                     pthread_cond_signal(&cpus_data[n].wakeup);
@@ -240,15 +240,17 @@ static void submit_io_request(pcb_t * pcb)
 }
 static void simulate_io()
 {
+	io_request_t * temp;
+pcb_t* pcb;
     if(io_queue_head==NULL)
     return;
 
     if(io_queue_head->execution_time<=0)
     {
-        pcb_t* pcb;
+        
         pcb=io_queue_head->pcb;
         io_queue_head->pcb->current_operation=(op_t*)(io_queue_head->pcb->current_operation)+1;
-        io_request_t * temp=io_queue_head;
+        temp=io_queue_head;
         io_queue_head=io_queue_head->next;
         if(io_queue_head==NULL)
             io_queue_tail=NULL;

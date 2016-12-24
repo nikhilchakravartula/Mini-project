@@ -1,4 +1,4 @@
-//write the scheduler here
+
 
 #include<pthread.h>
 
@@ -51,6 +51,8 @@ static pthread_cond_t cpu_not_idle;
 static pthread_mutex_t run_mutex;
 
 static pthread_mutex_t current_mutex;
+
+static pthread_t sch;
 
 static  pcb_t *current[NOC];
 
@@ -229,12 +231,12 @@ extern void enQueue(struct Queue *q, pcb_t* p)
 extern struct QNode *deQueueAtFront(struct Queue *q)
 
 {
-
+    struct QNode* temp;
     if (q->front == NULL)
 
        return NULL;
 
-    struct QNode *temp = q->front;
+    temp = q->front;
 
     q->front = temp->next;
 
@@ -256,11 +258,12 @@ extern struct QNode *deQueueAtFront(struct Queue *q)
 
 extern struct QNode *deQueueAtRear(struct Queue *q){
 
+struct QNode * temp;
     if(q->front == NULL)
 
         return NULL;
 
-    struct QNode *temp = q->rear;
+    temp = q->rear;
 
     q->rear = temp->prev;
 
@@ -415,45 +418,6 @@ extern void sorted_enqueue(struct Queue *q, pcb_t *p){
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /*======================================================================*/
 
 
@@ -461,10 +425,11 @@ extern void sorted_enqueue(struct Queue *q, pcb_t *p){
 extern void preempt(unsigned cpu_id)
 
 {
+    pcb_t* pcb;
 
 pthread_mutex_lock(&ready_queue_mutex);
 
- pcb_t* pcb=current[cpu_id];/*ready queue member of cpuid*/
+  pcb=current[cpu_id];/*ready queue member of cpuid*/
 pcb->state=PROCESS_READY;
 /*ADDTOTHEREADYQUEUE(cpu_id);*/
 
@@ -505,10 +470,11 @@ pthread_mutex_unlock(&ready_queue_mutex);
 extern void yield(unsigned cpu_id)
 
 {
+    pcb_t* pcb;
 
     pthread_mutex_lock(&ready_queue_mutex);
 
-  pcb_t* pcb=current[cpu_id];/*ready queue member of cpuid*/
+   pcb=current[cpu_id];/*ready queue member of cpuid*/
 
 pcb->state=PROCESS_BLOCKED;
 
@@ -527,10 +493,10 @@ pthread_mutex_unlock(&ready_queue_mutex);
 extern  void terminate(unsigned cpu_id)
 
 {
-
+pcb_t* pcb;
 pthread_mutex_lock(&ready_queue_mutex);
 
- pcb_t* pcb=current[cpu_id];/*ready queue member of cpuid*/
+ pcb=current[cpu_id];/*ready queue member of cpuid*/
 
 pcb->state=PROCESS_TERMINATED;
 
@@ -677,10 +643,11 @@ static int find_idlest_core_group(const int group_id)
 
 }
 
-
+/*
 static int calculate_overall_load(){
     
 }
+*/
 
 
 
@@ -697,7 +664,7 @@ static int find_idlest_core(unsigned int flag)
      int i;
      int leastLength = INT_MAX;
      int leastCore = INT_MAX;
-
+     int total_length = 0;
      if(flag==0)
      {
        /*pthread_mutex_lock(&run_mutex);*/
@@ -721,12 +688,12 @@ static int find_idlest_core(unsigned int flag)
      else
      {
        /*MAKE TRADE OFF HERE ... IF LOAD IS GREATER THAN waht it should be migrate it to other core*/
-        int group_id = get_group_id(flag);
-        core1 = find_idlest_core_group(group_id);
-        int total_length = 0;
+        
+        core1 = find_idlest_core_group(get_group_id(flag));
+        
         for(i=0; i<NOC; i++)
             total_length += run_queue[i]->length;
-        if(((run_queue[core1]+1)*10)/(total_length+1) > optimum_core_load){
+        if((float)((run_queue[core1]+1)->length*10)/(total_length+1) > optimum_core_load){
             leastLength = INT_MAX;
             leastCore = INT_MAX;
             /*pthread_mutex_lock(&run_mutex);*/
@@ -739,7 +706,7 @@ static int find_idlest_core(unsigned int flag)
             }
             /*pthread_mutex_unlock(&run_mutex);*/
             core2 = leastCore;
-            if(((run_queue[core2]+1)*10)/(total_length+1) > optimum_core_load*0.5)
+            if((float)((run_queue[core2]+1)->length*10)/(total_length+1) > optimum_core_load*0.5)
                 core = core2;
             else
                 core = core1;
@@ -796,10 +763,10 @@ static unsigned int get_group_id(unsigned int cpu_id)
 
 
 
-static void schedule_next_process()
+static void* schedule_next_process(void* data)
 
 {
-
+    pcb_t* pcb;
    int i,j;
  
 
@@ -831,7 +798,7 @@ static void schedule_next_process()
 
                 break;
 
-              pcb_t* pcb = node->key;
+              pcb = node->key;
 
               pthread_mutex_lock(&run_mutex);
 
@@ -851,7 +818,8 @@ static void schedule_next_process()
 
       }
 
-
+	pthread_exit(NULL);
+return NULL;
 
     /*  for(i=0;i<NOC;i++)
 
@@ -907,8 +875,6 @@ extern  void schedule(unsigned int cpu_id)
 
     int i;
 
-    int group;
-
     int highest_utilized_core = INT_MIN;
 
     int highest_length = INT_MIN;
@@ -931,7 +897,7 @@ extern  void schedule(unsigned int cpu_id)
 
 
 
-      group = get_group_id(cpu_id);
+     /* group = get_group_id(cpu_id);*/
 
       for(i=0;i<NOC;i++){
 
@@ -1017,9 +983,8 @@ int main(int argc,char** argv)
 {
 
 
-/*NOC=atoi(argv[1]);*/
+/*NOC=atoi(argv[1]);int i;*/
 
-int i;
 
 if(argc<2)
 
@@ -1044,12 +1009,10 @@ TIME_SLICE=atoi(argv[2]);
     migration_cost=0;
 
     optimum_core_load=100.0/NOC;
-
-    pthread_start(sch, NULL, schedule_next_process, NULL);
-
-    optimum_core_load=100/NOC;
+    pthread_create(&sch, NULL, schedule_next_process, NULL);
 
     start_simulator(NOC);
+return 0;
 
 
 
