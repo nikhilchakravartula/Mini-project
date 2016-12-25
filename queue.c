@@ -76,6 +76,7 @@ extern void enQueue(struct Queue *q, pcb_t* p)
 
 extern struct QNode *deQueueAtFront(struct Queue *q)
 {
+printf("deq at front q %u",q);
     if (q->front == NULL)
        return NULL;
     struct QNode *temp = q->front;
@@ -102,8 +103,8 @@ extern struct QNode *deQueueAtRear(struct Queue *q){
 }
 
 extern void sorted_enqueue(struct Queue *q, pcb_t *p){
-    struct QNode *temp, *prv, *n;
-    n = (struct QNode*)malloc(sizeof(struct QNode));
+    struct QNode *temp, *prv, *n;    
+n = (struct QNode*)malloc(sizeof(struct QNode));
     n->key = p;
     if(q->front == NULL){
         q->front = q->rear = n;

@@ -122,33 +122,36 @@ extern void start_simulator(unsigned number_of_cpus)
 
     for(i=0;i<cpu_count;i++)
     {
+	
         pthread_create(&cpu_threads[i],NULL,simulator_thread_function,(void*)(long)i);
+
     }
     simulator_supervisor_thread();
 }
 
 static void simulator_supervisor_thread()
 {
+
     print_gantt_chart_header();
 
     while(1)
     {
         pthread_mutex_lock(&simulator_mutex);
-        if(processes_terminated_count>PROCESS_COUNT)
+        if(processes_terminated_count>=PROCESS_COUNT)
         {
             print_final_statistics();
             exit(0);
         }
-        else
-        {
+       
+
             print_gantt_chart_line();
-            simulate_cpus();
+            simulate_cpus();       
             simulate_io();
             simulate_create();
             simulator_time++;
             pthread_mutex_unlock(&simulator_mutex);
             safe_sleep(1);
-        }
+        
     }
 
 }
@@ -156,8 +159,10 @@ static void simulator_supervisor_thread()
 static void simulate_cpus()
 {
     int i;
+
     for(i=0;i<cpu_count;i++)
     {
+	
         if(cpus_data[i].current_pcb!=NULL)
         simulate_process(i,cpus_data[i].current_pcb);
     }
@@ -211,10 +216,10 @@ static void simulate_process(unsigned int n,pcb_t* pcb)
 
         break;
         case OP_IO:
-        printf("Scheduled a blocked process : \t%d",pcb->pid);
+        printf("Scheduled a blocked process : \t%d\n",pcb->pid);
         break;
         case OP_TERMINATED:
-        printf("Scheduled a terminated process: \t %d",pcb->pid);
+        printf("Scheduled a terminated process: \t %d\n",pcb->pid);
         break;
     }
 
