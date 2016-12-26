@@ -239,8 +239,8 @@ static void submit_io_request(pcb_t * pcb)
     }
     else
     {
-        new_io_request->next=io_queue_head;
-        io_queue_head=new_io_request;
+        io_queue_tail->next=new_io_request;
+io_queue_tail=new_io_request;
     }
 }
 static void simulate_io()
@@ -249,14 +249,14 @@ static void simulate_io()
 pcb_t* pcb;
     if(io_queue_head==NULL)
     return;
-
+/*printf("IN IO EXE TIME IS %u",io_queue_head->execution_time);*/
     if(io_queue_head->execution_time<=0)
     {
+                temp=io_queue_head;
         
-        pcb=io_queue_head->pcb;
-        io_queue_head->pcb->current_operation=(op_t*)(io_queue_head->pcb->current_operation)+1;
-        temp=io_queue_head;
-        io_queue_head=io_queue_head->next;
+        temp->pcb->current_operation=(op_t*)(io_queue_head->pcb->current_operation)+1;
+pcb=temp->pcb;
+        io_queue_head=temp->next;
         if(io_queue_head==NULL)
             io_queue_tail=NULL;
         free(temp);
@@ -301,6 +301,7 @@ static void cpu_thread_function(unsigned cpu_id)
         switch (state)
         {
         case CPU_IDLE:
+          
             idle(cpu_id);
             break;
 
@@ -393,6 +394,8 @@ io_request_t *r;
             pthread_mutex_lock(&simulator_mutex);
           
         }
+	/*printQueues();
+	printf("\nover one time***************************\n");*/
     }
     printf("     <");
     r = io_queue_head;
@@ -439,7 +442,7 @@ extern void context_switch(unsigned int cpu_id, pcb_t *pcb,
     context_switches_count++;
     IRWL_WRITER_UNLOCK(student_lock);
     pthread_mutex_lock(&simulator_mutex);
-    cpus_data[cpu_id].current_pcb = pcb;
+	cpus_data[cpu_id].current_pcb = pcb;
     cpus_data[cpu_id].preemption_timer = preemption_time;
     pthread_mutex_unlock(&simulator_mutex);
     IRWL_WRITER_LOCK(student_lock);
@@ -470,8 +473,8 @@ static void simulate_create(void)
         IRWL_WRITER_LOCK(student_lock);
         wake_up(&processes[processes_created]);
         IRWL_WRITER_UNLOCK(student_lock);
-        pthread_mutex_lock(&simulator_mutex);
-        processes_created++;
+        pthread_mutex_lock(&simulator_mutex);      
+processes_created++;
     }
 }
 
@@ -489,7 +492,7 @@ extern void safe_sleep(unsigned long usec)
     ts.tv_sec = usec / 1000000;
     ts.tv_nsec = (usec % 1000000) * 1000;
 
-    while (nanosleep(&ts, &ts) != 0);
+   while (nanosleep(&ts, &ts) != 0);
 }
 
 

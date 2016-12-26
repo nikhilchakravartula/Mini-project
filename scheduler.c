@@ -1,80 +1,40 @@
-
-
 #include<pthread.h>
-
 #include<stdio.h>
-
 #include<stdlib.h>
-
 #include<assert.h>
-
 #include "simulator.h"
-
 #include <stdbool.h>
-
 #include <limits.h>
-
 #define NOQ 3
-
-#define NOC 1
-
+#define NOC 4
 #define HIGH_LOWER 0
-
 #define HIGH_UPPER 5
-
 #define MEDIUM_LOWER 6
-
 #define MEDIUM_UPPER 14
-
 #define LOW_LOWER 15
-
 #define LOW_UPPER 19
-
 #define CACHE_LEVEL1_ACCESS_TIME 1
-
 #define CACHE_LEVEL2_ACCESS_TIME 4
-
 #define CACHE_HIT_RATE 80
-
 #define CACHE_MISS_RATE 20
-
 #define MEMORY_ACCESS_TIME 100
-
 #define LEVEL1_MIG_COST (CACHE_HIT_RATE/100.0)*(CACHE_LEVEL1_ACCESS_TIME) +(CACHE_MISS_RATE/100.0)*(CACHE_LEVEL2_ACCESS_TIME)
-
 #define LEVEL2_MIG_COST (CACHE_HIT_RATE/100.0)*(CACHE_LEVEL2_ACCESS_TIME) +(CACHE_MISS_RATE/100.0)*(MEMORY_ACCESS_TIME)
 /*static unsigned NOC;*/
 static pthread_mutex_t ready_queue_mutex;
-
-static pthread_cond_t cpu_not_idle;
-
 static pthread_mutex_t run_mutex;
-
 static pthread_mutex_t current_mutex;
-
-static pthread_t sch;
-
 static  pcb_t *current[NOC];
-
 static struct Queue* run_queue[NOC];
-
 static struct Queue* ready_queue[NOQ];
-
 static int max_chunks;
-
 static int no_of_chunks[NOQ];
-
 static int size_of_chunk[NOQ];
-
 static int group_cores[NOC];
-
-static unsigned num_processes_in_ready;
-
 static unsigned migration_cost;
-
 static double optimum_core_load=0;
+static int TIME_SLICE=-1;
 
-static unsigned TIME_SLICE=-1;
 
 static bool placeInQueue( pcb_t *pcb);
 
@@ -118,9 +78,9 @@ extern struct Queue *createQueue();
 
 extern void enQueue(struct Queue *q, pcb_t* k);
 
-extern struct QNode *deQueueAtRear(struct Queue *q);
+extern struct QNode *deQueueAtRear(struct Queue *q,int flag);
 
-extern struct QNode *deQueueAtFront(struct Queue *q);
+extern struct QNode *deQueueAtFront(struct Queue *q,int flag);
 
 extern void sorted_enqueue(struct Queue *q, pcb_t *p);
 
@@ -133,14 +93,15 @@ extern void sorted_enqueue(struct Queue *q, pcb_t *p);
 
 
 extern void printQueue(struct Queue *q)
-
 {
 
     struct QNode* temp = q->front;
-
-    if(temp==NULL)
-
+		if(q==NULL)
+			return;
+    if(temp==NULL){
+	/*printf("Empty Queue :p :D :D :D\n");*/
         return;
+    }
 
 
 
@@ -162,8 +123,20 @@ extern void printQueue(struct Queue *q)
 
 }
 
+/*
+extern void printQueues()
+{
+int i;
+
+printf("\nREADY QUEUE\n");
+for(i=0;i<NOQ;i++)
+printQueue(ready_queue[i]);
 
 
+printf("RUN QUEUE\n");
+for(i=0;i<NOC;i++)
+printQueue(run_queue[i]);
+}*/
 extern struct QNode* newNode(pcb_t *p)
 
 {
@@ -202,8 +175,10 @@ extern void enQueue(struct Queue *q, pcb_t* p)
 
 {
 
-    struct QNode *temp = newNode(p);
-
+    struct QNode *temp ;
+/*printf("\nenQueue from %d\n",(int)pthread_self());*/
+pthread_mutex_lock(&ready_queue_mutex);
+	temp= newNode(p);
     if (q->rear == NULL)
 
     {
@@ -211,7 +186,8 @@ extern void enQueue(struct Queue *q, pcb_t* p)
         q->front = q->rear = temp;
 
         q->length++;
-
+pthread_mutex_unlock(&ready_queue_mutex);
+/*printf("\nfinished enqueue\n");*/
         return;
 
     }
@@ -223,22 +199,42 @@ extern void enQueue(struct Queue *q, pcb_t* p)
     q->rear = temp;
 
     q->length++;
-
+pthread_mutex_unlock(&ready_queue_mutex);
+/*printf("finished enqueue\n");*/
 }
 
 
 
-extern struct QNode *deQueueAtFront(struct Queue *q)
+extern struct QNode *deQueueAtFront(struct Queue *q,int flag)
 
 {
     struct QNode* temp;
 
-	
+/*printf("\ndeque at front from %d\n",(int)pthread_self());	*/
+
+	if(flag==1)
+	{
+		pthread_mutex_lock(&ready_queue_mutex);
+
+	}
+	else
+	{
+		pthread_mutex_lock(&run_mutex);
+	}
 
     if (q->front == NULL)
+{
+	if(flag==1)
+	{
+		pthread_mutex_unlock(&ready_queue_mutex);
 
+	}
+	else
+	{
+		pthread_mutex_unlock(&run_mutex);
+	}
         return NULL;
-
+}
     temp = q->front;
 
     q->front = temp->next;
@@ -253,7 +249,15 @@ extern struct QNode *deQueueAtFront(struct Queue *q)
 
     q->length--;
 
-	
+	if(flag==1)
+	{
+		pthread_mutex_unlock(&ready_queue_mutex);
+
+	}
+	else
+	{
+		pthread_mutex_unlock(&run_mutex);
+	}
 
     return temp;
 
@@ -261,12 +265,12 @@ extern struct QNode *deQueueAtFront(struct Queue *q)
 
 
 
-extern struct QNode *deQueueAtRear(struct Queue *q)
+extern struct QNode *deQueueAtRear(struct Queue *q,int flag)
 {
 
     struct QNode * temp;
 
-	
+	/*printf("\ndequeue from rear %d\n",(int)pthread_self());*/
     if(q->front == NULL)
 
         return NULL;
@@ -298,9 +302,10 @@ extern void sorted_enqueue(struct Queue *q, pcb_t *p)
 
     struct QNode *temp, *prv, *n;
 
+
+pthread_mutex_lock(&run_mutex);
     n =newNode(p);
-
-
+/*printf("\nsorted_enqueue from %d\n",(int)pthread_self());*/
 
     if(q->front == NULL)
     {
@@ -308,7 +313,8 @@ extern void sorted_enqueue(struct Queue *q, pcb_t *p)
         q->front = q->rear = n;
 
         q->length++;
-
+pthread_mutex_unlock(&run_mutex);
+/*printf("\n\nFInished sorted Enqueue\n\n");*/
         return;
 
     }
@@ -434,7 +440,8 @@ extern void sorted_enqueue(struct Queue *q, pcb_t *p)
         q->length++;
 
     }
-
+pthread_mutex_unlock(&run_mutex);
+/*printf("\n\nfinished sorted enqueue\n\n");*/
 }
 
 
@@ -448,21 +455,14 @@ extern void preempt(unsigned cpu_id)
 
 {
     pcb_t* pcb;
+pthread_mutex_lock(&current_mutex);
+pcb=current[cpu_id];
+pcb->state=PROCESS_READY;
+pthread_mutex_unlock(&current_mutex);
+placeInQueue(pcb);
+schedule(cpu_id);
 
-    pthread_mutex_lock(&ready_queue_mutex);
 
-    pcb=current[cpu_id];/*ready queue member of cpuid*/
-    pcb->state=PROCESS_READY;
-    /*ADDTOTHEREADYQUEUE(cpu_id);*/
-
-    placeInQueue(pcb);
-
-    num_processes_in_ready+=1;
-
-   
-
-    pthread_mutex_unlock(&ready_queue_mutex);
- schedule(cpu_id);
 
 }
 
@@ -473,19 +473,7 @@ extern void preempt(unsigned cpu_id)
 extern  void idle(unsigned cpu_id)
 
 {
-
-    pthread_mutex_lock(&ready_queue_mutex);
-
-    /*while( num_processes_in_ready==0)
-
-        pthread_cond_wait(&cpu_not_idle,&ready_queue_mutex);*/
-
-    
-
-    pthread_mutex_unlock(&ready_queue_mutex);
-schedule(cpu_id);
-
-
+	schedule(cpu_id);
 
 }
 
@@ -495,19 +483,11 @@ extern void yield(unsigned cpu_id)
 
 {
 	    pcb_t* pcb;
-	
-
-
-    pthread_mutex_lock(&ready_queue_mutex);
-    pcb=current[cpu_id];/*ready queue member of cpuid*/
-
+    pthread_mutex_lock(&current_mutex);
+    pcb=current[cpu_id];
     pcb->state=PROCESS_BLOCKED;
-
-    
-
-    pthread_mutex_unlock(&ready_queue_mutex);
-schedule(cpu_id);
-
+    pthread_mutex_unlock(&current_mutex);
+    schedule(cpu_id);
 
 
 
@@ -520,35 +500,19 @@ extern  void terminate(unsigned cpu_id)
 
 {
     pcb_t* pcb;
-    pthread_mutex_lock(&ready_queue_mutex);
-
-    pcb=current[cpu_id];/*ready queue member of cpuid*/
-
+    pthread_mutex_lock(&current_mutex);
+    pcb=current[cpu_id];
     pcb->state=PROCESS_TERMINATED;
-
-   
-
-    pthread_mutex_unlock(&ready_queue_mutex);
- schedule(cpu_id);
-
-
-
-
-
+    pthread_mutex_unlock(&current_mutex);
+    schedule(cpu_id);
 }
-
-
-
-
-
-
 
 static void initialise_ready_and_run_queue()
 
 {
 
     int i;
-
+	int group_val=1;
     max_chunks = 12;
 
     no_of_chunks[0] = max_chunks/6;
@@ -557,45 +521,27 @@ static void initialise_ready_and_run_queue()
 
     no_of_chunks[2] = max_chunks/2;
 
-
-
     for(i=0; i<NOQ; i++)
 
     {
-
-        pthread_mutex_lock(&ready_queue_mutex);
-
         ready_queue[i] = createQueue();
 
-        pthread_mutex_unlock(&ready_queue_mutex);
-
     }
+	for(i=0;i<NOC;i++)
+	{
+		if(i&1)
+			{
+				group_cores[i]=group_val;
+				group_val++;
+			}
+		else
+				group_cores[i]=group_val;
+	}
 
     for(i=0; i<NOC; i++)
     {
-
-
-
-        group_cores[i] = 1+rand()%2;
-
-
-
-        pthread_mutex_lock(&run_mutex);
-
         run_queue[i] = createQueue();
-
-        pthread_mutex_unlock(&run_mutex);
-
-
-
-        pthread_mutex_lock(&current_mutex);
-
         current[i] = NULL;
-
-        pthread_mutex_unlock(&current_mutex);
-
-
-
     }
 
 }
@@ -608,32 +554,26 @@ static bool placeInQueue( pcb_t *pcb)
 
 {
 
-
-
     assert(pcb->priority>=HIGH_LOWER && pcb->priority<=LOW_UPPER);
-
-    /*pthread_mutex_lock(&ready_queue_mutex);*/
-
-    if( pcb->priority>=HIGH_LOWER&& pcb->priority<=HIGH_UPPER)
-
-        enQueue(ready_queue[0],pcb);
+	
+    if( pcb->priority>=HIGH_LOWER&& pcb->priority<=HIGH_UPPER){
+	
+        enQueue(ready_queue[0],pcb);}
 
     else if( pcb->priority>=MEDIUM_LOWER&& pcb->priority<=MEDIUM_UPPER)
-
-        enQueue(ready_queue[1],pcb);
+	{
+	        enQueue(ready_queue[1],pcb);}
 
     else if( pcb->priority>=LOW_LOWER&& pcb->priority<=LOW_UPPER)
-
+	{
         enQueue(ready_queue[2],pcb);
-
-    pthread_cond_broadcast(&cpu_not_idle);
+	}	
 
     return true;
 
 }
 
 
-/*WHAT THE FUCK IS THIS!!!*/
 
 
 
@@ -760,7 +700,7 @@ static void dispatch_process( pcb_t *pcb)
 
     int core;
 
-    if(pcb->prev_cpu_id==-1)
+    if(pcb->prev_cpu_id==10000)
 
         core = find_idlest_core(0);
 
@@ -774,10 +714,9 @@ static void dispatch_process( pcb_t *pcb)
     pcb->vruntime=0;
     pcb->prev_cpu_id = core;
     }
-printf("\n\nin dispatch state is %d\n\n",pcb->state);
-    /*pthread_mutex_lock(&run_mutex);*/
+
     sorted_enqueue(run_queue[core],pcb);
-    /*pthread_mutex_unlock(&run_mutex);*/
+
 
 }
 
@@ -786,37 +725,22 @@ printf("\n\nin dispatch state is %d\n\n",pcb->state);
 
 
 static unsigned int get_group_id(unsigned int cpu_id)
-
 {
 
     return group_cores[cpu_id];
 
 }
 
-
-
-
-
-static void* schedule_next_process(void* data)
-
+static void* schedule_next_process()
 {
     pcb_t* pcb;
     int i,j;
 struct QNode* node;
-
-    while(true)
-    {
-
-
+            
 
         for(i=0; i<NOQ; i++)
 
         {
-
-            pthread_mutex_lock(&ready_queue_mutex);
-
-
-
             size_of_chunk[i] = ready_queue[i]->length/no_of_chunks[i];
 
             if(size_of_chunk[i]<1)
@@ -826,37 +750,19 @@ struct QNode* node;
             for(j=0; j<size_of_chunk[i]; j++)
 
             {
-
-
-node = deQueueAtFront(ready_queue[i]);
-
-
+		node = deQueueAtFront(ready_queue[i],1);
 
                 if(node==NULL)
-
-                    break;
-
+			{
+				pcb=NULL;
+				break;				
+			}
                 pcb = node->key;
-
-                pthread_mutex_lock(&run_mutex);
-
-                dispatch_process(pcb);
-
-                num_processes_in_ready--;
-
-                pthread_mutex_unlock(&run_mutex);
-
+              dispatch_process(pcb);
             }
-
-            pthread_mutex_unlock(&ready_queue_mutex);
-
         }
+    
 
-
-
-    }
-
-    pthread_exit(NULL);
     return NULL;
 
     /*  for(i=0;i<NOC;i++)
@@ -881,32 +787,15 @@ extern  void wake_up( pcb_t *pcb)
 
 {
 
-    pthread_mutex_lock(&ready_queue_mutex);
-
     pcb->state = PROCESS_READY;
 
-
-
-    /*  if(!placeInQueue(process))
-
-         exit(1);     MODIFIED THIS*/
-
-
-
-
-
     placeInQueue(pcb);
-
-    num_processes_in_ready+=1;
-
-    pthread_mutex_unlock(&ready_queue_mutex);
 
 }
 
 
 
 extern  void schedule(unsigned int cpu_id)
-
 {
 
     pcb_t *pcb = NULL;
@@ -916,11 +805,9 @@ extern  void schedule(unsigned int cpu_id)
     int highest_utilized_core = INT_MIN;
 
     int highest_length = INT_MIN;
-	printf("before scheule\n");
-printQueue(run_queue[cpu_id]);
-	
-	 node = deQueueAtRear(run_queue[cpu_id]);   
-
+	pthread_mutex_lock(&current_mutex);
+	schedule_next_process();
+	node = deQueueAtFront(run_queue[cpu_id],0); 
 
 
     if(node!=NULL)
@@ -936,10 +823,7 @@ printQueue(run_queue[cpu_id]);
 
     else
     {
-
-
-
-        /* group = get_group_id(cpu_id);*/
+	pcb=NULL;
 
         for(i=0; i<NOC; i++)
         {
@@ -955,17 +839,15 @@ printQueue(run_queue[cpu_id]);
 
         }
 
-        /*WHAT IF NODE IS NULL HERE*/
-
-        node = deQueueAtFront(run_queue[highest_utilized_core]);
+        
+        node = deQueueAtFront(run_queue[highest_utilized_core],0);
 
         if(node!=NULL)
 
             pcb = node->key;
-
-
-
+	else pcb=NULL;
     }
+	
 
     if(pcb==NULL)
 
@@ -986,44 +868,25 @@ printQueue(run_queue[cpu_id]);
                 highest_length = run_queue[i]->length;
 
             }
-
-
-
         }
-
-        node = deQueueAtFront(run_queue[highest_utilized_core]);
-
-        /*WHAT IF NODE IS NULL HERE*/
+        node = deQueueAtFront(run_queue[highest_utilized_core],0);
 
 
         if(node!=NULL)
 
             pcb = node->key;
+	else pcb=NULL;
 
     }
-
-
-	printf("after scheule\n");
-printQueue(run_queue[cpu_id]);
-    if(pcb==NULL)
-{}
-      /*  current[cpu_id] = NULL;*/
-
-    else
-    {
-	
-	
-        current[cpu_id] = pcb;
-
-        pcb->state=PROCESS_RUNNING;
-
+	/*if(pcb==NULL)
+	printf("\ncontext12345\n===============++++++++++++++++++++++++++++++============ with NULL\t\n\n");
+	else printf("\nCONTEXT SWITCH WITH NOT NULL\n");       */ 
+	current[cpu_id] = pcb;
+	if(pcb!=NULL)
+	pcb->state=PROCESS_RUNNING;
+	pthread_mutex_unlock(&current_mutex);
         context_switch(cpu_id,pcb,TIME_SLICE);
-
-    }
-
 }
-
-
 
 
 
@@ -1038,9 +901,6 @@ int main(int argc,char** argv)
     if(argc<2)
 
     {
-
-
-
         printf("WHAT HAVE YOU GIVEN ME\t EXPECTING SOME OTHER THING :P");
 
         exit(0);
@@ -1050,16 +910,14 @@ int main(int argc,char** argv)
     TIME_SLICE=atoi(argv[2]);
 
     pthread_mutex_init(&ready_queue_mutex,NULL);
-
-    pthread_cond_init(&cpu_not_idle,NULL);
+pthread_mutex_init(&run_mutex,NULL);
+pthread_mutex_init(&current_mutex,NULL);
 
     initialise_ready_and_run_queue();
 
     migration_cost=0;
 
     optimum_core_load=100.0/NOC;
-    pthread_create(&sch, NULL, schedule_next_process, NULL);
-
     start_simulator(NOC);
     return 0;
 
