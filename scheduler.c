@@ -34,7 +34,7 @@ static int group_cores[NOC];
 static unsigned migration_cost;
 static double optimum_core_load=0;
 static int TIME_SLICE=-1;
-
+static int SCHEDULING_TYPE; 
 
 static bool placeInQueue( pcb_t *pcb);
 
@@ -454,16 +454,13 @@ pthread_mutex_unlock(&run_mutex);
 extern void preempt(unsigned cpu_id)
 
 {
-    pcb_t* pcb;
-pthread_mutex_lock(&current_mutex);
-pcb=current[cpu_id];
-pcb->state=PROCESS_READY;
-pthread_mutex_unlock(&current_mutex);
-placeInQueue(pcb);
-schedule(cpu_id);
-
-
-
+	pcb_t* pcb;
+	pthread_mutex_lock(&current_mutex);
+	pcb=current[cpu_id];
+	pcb->state=PROCESS_READY;
+	pthread_mutex_unlock(&current_mutex);
+	placeInQueue(pcb);
+	schedule(cpu_id);
 }
 
 
@@ -471,27 +468,20 @@ schedule(cpu_id);
 
 
 extern  void idle(unsigned cpu_id)
-
 {
 	schedule(cpu_id);
-
 }
 
 
 
 extern void yield(unsigned cpu_id)
-
 {
-	    pcb_t* pcb;
+    pcb_t* pcb;
     pthread_mutex_lock(&current_mutex);
     pcb=current[cpu_id];
     pcb->state=PROCESS_BLOCKED;
     pthread_mutex_unlock(&current_mutex);
     schedule(cpu_id);
-
-
-
-
 }
 
 
@@ -554,6 +544,9 @@ static bool placeInQueue( pcb_t *pcb)
 
 {
 
+  if(SCHEDULING_TYPE==0)
+  { 
+
     assert(pcb->priority>=HIGH_LOWER && pcb->priority<=LOW_UPPER);
 	
     if( pcb->priority>=HIGH_LOWER&& pcb->priority<=HIGH_UPPER){
@@ -570,7 +563,15 @@ static bool placeInQueue( pcb_t *pcb)
 	}	
 
     return true;
+  }
 
+  else if(SCHEDULING_TYPE==2)
+  {
+     enQueue(ready_queue[0],pcb);  
+     return true; 
+  } 
+
+  return false;
 }
 
 
@@ -698,26 +699,25 @@ static void dispatch_process( pcb_t *pcb)
 
 {
 
-    int core;
+      int core;
+   
+	    if(pcb->prev_cpu_id==10000)
 
-    if(pcb->prev_cpu_id==10000)
+		core = find_idlest_core(0);
 
-        core = find_idlest_core(0);
+	    else
 
-    else
-
-        core = find_idlest_core(pcb->prev_cpu_id);
-
-
-
-    if(core==pcb->prev_cpu_id){
-    pcb->vruntime=0;
-    pcb->prev_cpu_id = core;
-    }
-
-    sorted_enqueue(run_queue[core],pcb);
+		core = find_idlest_core(pcb->prev_cpu_id);
 
 
+
+	    if(core==pcb->prev_cpu_id){
+	    pcb->vruntime=0;
+	    pcb->prev_cpu_id = core;
+	    }
+	    sorted_enqueue(run_queue[core],pcb);
+        
+               
 }
 
 
@@ -735,52 +735,31 @@ static void* schedule_next_process()
 {
     pcb_t* pcb;
     int i,j;
-struct QNode* node;
+    struct QNode* node;
             
+		for(i=0; i<NOQ; i++)
+		{
+		    size_of_chunk[i] = ready_queue[i]->length/no_of_chunks[i];
+		    if(size_of_chunk[i]<1)
+		        size_of_chunk[i]=1;
 
-        for(i=0; i<NOQ; i++)
-
-        {
-            size_of_chunk[i] = ready_queue[i]->length/no_of_chunks[i];
-
-            if(size_of_chunk[i]<1)
-
-                size_of_chunk[i]=1;
-
-            for(j=0; j<size_of_chunk[i]; j++)
-
-            {
-		node = deQueueAtFront(ready_queue[i],1);
-
-                if(node==NULL)
-			{
-				pcb=NULL;
-				break;				
-			}
-                pcb = node->key;
-              dispatch_process(pcb);
-            }
-        }
-    
-
-    return NULL;
-
-    /*  for(i=0;i<NOC;i++)
-
-      {
-
-          printf("\n");
-
-          printQueue(run_queue[i]);
-
-      }
-
-
-
-     printf("\nScheduling Done.....\n");*/
+		    for(j=0; j<size_of_chunk[i]; j++)
+		    {
+			node = deQueueAtFront(ready_queue[i],1);
+		        if(node==NULL)
+				{
+					pcb=NULL;
+					break;				
+				}
+		        pcb = node->key;
+		      dispatch_process(pcb);
+		    }
+		}
+	    
+	       return NULL;
+           
 
 }
-
 
 
 extern  void wake_up( pcb_t *pcb)
@@ -797,95 +776,114 @@ extern  void wake_up( pcb_t *pcb)
 
 extern  void schedule(unsigned int cpu_id)
 {
-
-    pcb_t *pcb = NULL;
+                
+        pcb_t *pcb = NULL;
 	struct QNode* node;
-    int i;
+	int i;
+	int highest_utilized_core = INT_MIN;
+	int highest_length = INT_MIN;
+             
+             if(SCHEDULING_TYPE==0)
+               {  
+			pthread_mutex_lock(&current_mutex);
+			schedule_next_process();
+			node = deQueueAtFront(run_queue[cpu_id],0); 
 
-    int highest_utilized_core = INT_MIN;
 
-    int highest_length = INT_MIN;
-	pthread_mutex_lock(&current_mutex);
-	schedule_next_process();
-	node = deQueueAtFront(run_queue[cpu_id],0); 
+		    if(node!=NULL)
+		    {
 
+			pcb= node->key;
 
-    if(node!=NULL)
-    {
+			current[cpu_id] = pcb;
 
-        pcb= node->key;
+			pcb->state=PROCESS_RUNNING;
 
-        current[cpu_id] = pcb;
+		    }
 
-        pcb->state=PROCESS_RUNNING;
+		    else
+		    {
+			pcb=NULL;
 
-    }
+			for(i=0; i<NOC; i++)
+			{
 
-    else
-    {
-	pcb=NULL;
+			    if(group_cores[i]==get_group_id(i) && run_queue[i]->length>highest_length)
+			    {
 
-        for(i=0; i<NOC; i++)
-        {
+				highest_utilized_core = i;
 
-            if(group_cores[i]==get_group_id(i) && run_queue[i]->length>highest_length)
-            {
+				highest_length = run_queue[i]->length;
 
-                highest_utilized_core = i;
+			    }
 
-                highest_length = run_queue[i]->length;
+			}
 
-            }
+		
+			node = deQueueAtFront(run_queue[highest_utilized_core],0);
 
-        }
+			if(node!=NULL)
 
-        
-        node = deQueueAtFront(run_queue[highest_utilized_core],0);
-
-        if(node!=NULL)
-
-            pcb = node->key;
-	else pcb=NULL;
-    }
+			    pcb = node->key;
+			else pcb=NULL;
+		    }
 	
 
-    if(pcb==NULL)
+		    if(pcb==NULL)
 
-    {
+		    {
 
-        highest_utilized_core = INT_MIN;
+			highest_utilized_core = INT_MIN;
 
-        highest_length = INT_MIN;
+			highest_length = INT_MIN;
 
-        for(i=0; i<NOC; i++)
-        {
+			for(i=0; i<NOC; i++)
+			{
 
-            if(run_queue[i]->length>highest_length)
-            {
+			    if(run_queue[i]->length>highest_length)
+			    {
 
-                highest_utilized_core = i;
+				highest_utilized_core = i;
 
-                highest_length = run_queue[i]->length;
+				highest_length = run_queue[i]->length;
 
-            }
-        }
-        node = deQueueAtFront(run_queue[highest_utilized_core],0);
+			    }
+			}
+			node = deQueueAtFront(run_queue[highest_utilized_core],0);
 
 
-        if(node!=NULL)
+			if(node!=NULL)
 
-            pcb = node->key;
-	else pcb=NULL;
+			    pcb = node->key;
+			else pcb=NULL;
+		    }
+			/*if(pcb==NULL)
+			printf("\ncontext12345\n===============++++++++++++++++++++++++++++++============ with NULL\t\n\n");
+			else printf("\nCONTEXT SWITCH WITH NOT NULL\n");       */ 
+			current[cpu_id] = pcb;
+			if(pcb!=NULL)
+			pcb->state=PROCESS_RUNNING;
+			pthread_mutex_unlock(&current_mutex);
+			context_switch(cpu_id,pcb,TIME_SLICE);
+                   }
 
-    }
-	/*if(pcb==NULL)
-	printf("\ncontext12345\n===============++++++++++++++++++++++++++++++============ with NULL\t\n\n");
-	else printf("\nCONTEXT SWITCH WITH NOT NULL\n");       */ 
-	current[cpu_id] = pcb;
-	if(pcb!=NULL)
-	pcb->state=PROCESS_RUNNING;
-	pthread_mutex_unlock(&current_mutex);
-        context_switch(cpu_id,pcb,TIME_SLICE);
+                  else if(SCHEDULING_TYPE==2)
+                   {
+			node = deQueueAtFront(ready_queue[0],1);
+			 pthread_mutex_lock(&current_mutex);
+			pcb=NULL;			
+			if(node!=NULL)	
+			 {		
+                               pcb = node->key;
+				pcb->state=PROCESS_RUNNING;
+
+			}
+		                current[cpu_id] = pcb;						
+				pthread_mutex_unlock(&current_mutex);
+				context_switch(cpu_id,pcb,-1);  
+		
+		   } 
+ 
 }
 
 
@@ -893,34 +891,30 @@ extern  void schedule(unsigned int cpu_id)
 int main(int argc,char** argv)
 
 {
-
-
     /*NOC=atoi(argv[1]);int i;*/
 
-
     if(argc<2)
-
     {
         printf("WHAT HAVE YOU GIVEN ME\t EXPECTING SOME OTHER THING :P");
-
         exit(0);
-
     }
 
-    TIME_SLICE=atoi(argv[2]);
+   SCHEDULING_TYPE = atoi(argv[2]);
+    if(SCHEDULING_TYPE<0&&SCHEDULING_TYPE>2){
+      printf("\n Give valid schediuling algorithm..");     
+      return 1; 
+    }  
 
+   if(SCHEDULING_TYPE==0||SCHEDULING_TYPE==1)
+     TIME_SLICE=atoi(argv[3]);
+   
     pthread_mutex_init(&ready_queue_mutex,NULL);
-pthread_mutex_init(&run_mutex,NULL);
-pthread_mutex_init(&current_mutex,NULL);
-
+    pthread_mutex_init(&run_mutex,NULL);
+    pthread_mutex_init(&current_mutex,NULL);
     initialise_ready_and_run_queue();
 
     migration_cost=0;
-
     optimum_core_load=100.0/NOC;
     start_simulator(NOC);
     return 0;
-
-
-
 }
