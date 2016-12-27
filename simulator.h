@@ -30,7 +30,7 @@ typedef struct
    
     unsigned int pid;
     process_state_t state;  
-    const int priority;
+     int priority;
     const char* name;
     op_t* current_operation;
     unsigned prev_cpu_id;

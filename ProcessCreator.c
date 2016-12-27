@@ -1,9 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "scheduler1.h"
+#include<string.h>
+#include "scheduler.h"
 #define MAX_OP_COUNT 25
 #define MAX_BURST_TIME 10
 #define MAX_IO_TIME 10
+
+int *processes1;
 
 operation_type_t get_operation(int flag){
     if(flag == 0)
@@ -42,21 +45,23 @@ extern pcb_t* create_processes(int n){
     pcb_t *processes;
     srand(time(NULL));
     processes = malloc(sizeof(pcb_t)*n);
+    processes1 = malloc(sizeof(int)*n);
+
     for(i=0; i<n; i++){
         processes[i].pid = i;
         processes[i].state = PROCESS_NEW;
-        processes[i].priority = 1+rand()%20;
+        processes[i].priority = rand()%20;
         pname = malloc(15);
         num = malloc(5);
         strcpy(pname,"process");
-        itoa(i+1,num,10);
+        sprintf(num,"%d",i+1);
         strcat(pname, num);
         processes[i].name = pname;
         processes[i].prev_cpu_id = 10000;
         processes[i].vruntime = 0;
         num_ops = 1+rand()%MAX_OP_COUNT;
         if(num_ops&1)num_ops+=1;
-        processes[i].num_ops=num_ops+2;
+        processes1[i]=num_ops+2;
         processes[i].current_operation = new_operation(num_ops);
     }
     return processes;
@@ -76,72 +81,41 @@ void printprocesses(pcb_t * process,int n)
 {
 int i;
 int j;
+
+printf("  #include \"simulator.h\"\n#include \"process.h\"\n  ");
+
+
 for(i=0;i<n;i++)
 {
-    printf("\n%s %d prio:%d state:%d\n",process[i].name,process[i].pid,process[i].priority,process[i].state);
-    for(j=0;j<process[i].num_ops;j++)
+   printf("static op_t pid%d_ops[]={",i);
+    for(j=0;j<processes1[i]-1;j++)
     {
 
-        printf("\n{%s %d}\n",printEnum(process[i].current_operation[j].type),process[i].current_operation[j].time);
+        printf("\n{%s , %d},\n",printEnum(process[i].current_operation[j].type),process[i].current_operation[j].time);
 
     }
+	printf("\n{%s , %d}};\n",printEnum(process[i].current_operation[j].type),process[i].current_operation[j].time);
 
 }
 
+printf("\npcb_t processes[] = {\n");
+
+for(i=0;i<n-1;i++)
+{
+   
+	printf("{ %d,PROCESS_NEW, %d,\"%s\",pid%d_ops,10000,0},\n",process[i].pid,process[i].priority,process[i].name,i);
 
 }
-int main()
-{/*
-  pcb_t proc[N];
-  int i;
-  srand(time(NULL));
-  struct Queue *que = createQueue();
-  for(i=0;i<5;i++){
-     proc[i].pid = i+1;
-     proc[i].priority = (unsigned int)rand()%20;
-     proc[i].cpu_id = -1;
-     proc[i].state = PROCESS_NEW;
-     proc[i].current_operation = (op_t*)malloc(sizeof(op_t));
-     proc[i].current_operation->time = 1+rand()% 15;
-     proc[i].current_operation->type = OP_CPU;
-     proc[i].vruntime = rand()%20;
-     sorted_enqueue(que,&proc[i]);
-     printQueue(que);
-     }
-     deQueueAtFront(que);
-     printQueue(que);
-     deQueueAtFront(que);
-     printQueue(que);
-     deQueueAtRear(que);
-     printQueue(que);
-     deQueueAtRear(que);
-     printQueue(que);
-
-/*
-  struct Queue* queue[NOQ];
-  for(i=0;i<NOQ;i++)
-        queue[i] = createQueue();
+printf("{ %d,PROCESS_NEW, %d,\"%s\",pid%d_ops,10000,0}};\n",process[i].pid,process[i].priority,process[i].name,i);
 
 
-  for(i=0;i<N;i++)
-    printf("%d\t%d\n",proc[i].pid,proc[i].priority);
 
-  printf("\n\n\n");
-
-  initialise_disks_queue();
-
-  for(i=0;i<N;i++)
-    wake_up(&proc[i]);
-
-  schedule_next_process();
-
- /* for(i=0;i<NOQ;i++){
-    printQueue(queue[i]);
-    printf("\n\n");
-    }*/
-
-int n;
-scanf("%d",&n);
+}
+int main(int argc,char** argv)
+{
+	if(argc<2){printf("WHAT HAVE U SENT!\n");
+	exit(0);}
+	int n=atoi(argv[1]);
     pcb_t* processes=create_processes(n);
     printprocesses(processes,n);
   return 0;

@@ -439,6 +439,7 @@ extern void context_switch(unsigned int cpu_id, pcb_t *pcb,
       assert(cpu_id < cpu_count);
     assert(pcb == NULL || (pcb >= processes && pcb <= processes +
         PROCESS_COUNT - 1));
+	if(pcb!=NULL)
     context_switches_count++;
     IRWL_WRITER_UNLOCK(student_lock);
     pthread_mutex_lock(&simulator_mutex);

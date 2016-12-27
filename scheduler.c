@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <limits.h>
 #define NOQ 3
-#define NOC 4
+#define NOC 20
 #define HIGH_LOWER 0
 #define HIGH_UPPER 5
 #define MEDIUM_LOWER 6
