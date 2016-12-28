@@ -103,10 +103,10 @@ printf("\npcb_t processes[] = {\n");
 for(i=0;i<n-1;i++)
 {
    
-	printf("{ %d,PROCESS_NEW, %d,\"%s\",pid%d_ops,10000,0},\n",process[i].pid,process[i].priority,process[i].name,i);
+	printf("{ %d,PROCESS_NEW, %d,\"%s\",pid%d_ops,10000,0,0},\n",process[i].pid,process[i].priority,process[i].name,i);
 
 }
-printf("{ %d,PROCESS_NEW, %d,\"%s\",pid%d_ops,10000,0}};\n",process[i].pid,process[i].priority,process[i].name,i);
+printf("{ %d,PROCESS_NEW, %d,\"%s\",pid%d_ops,10000,0,0}};\n",process[i].pid,process[i].priority,process[i].name,i);
 
 
 

@@ -35,6 +35,7 @@ typedef struct
     op_t* current_operation;
     unsigned prev_cpu_id;
     unsigned vruntime;
+	unsigned prev_vruntime;
 
 }pcb_t;
 

@@ -673,6 +673,7 @@ static void initialise_ready_and_run_queue()
 			}
 		else
 				group_cores[i]=group_val;
+	printf("\n %d belongs to %d\n",i,group_cores[i]);
 	}
 
     for(i=0; i<NOC; i++)
@@ -864,12 +865,10 @@ static void dispatch_process( pcb_t *pcb)
 
 		core = find_idlest_core(pcb->prev_cpu_id);
 
-
-
 	    if(core!=pcb->prev_cpu_id){
+	pcb->prev_vruntime=pcb->vruntime;
 	    pcb->vruntime=0;
-	    pcb->prev_cpu_id = core;
-		migration_cost+=LEVEL2_MIG_COST;
+
 	    }
 	    sorted_enqueue(run_queue[core],pcb);
         
@@ -1063,8 +1062,15 @@ extern  void schedule(unsigned int cpu_id)
 			printf("\ncontext12345\n===============++++++++++++++++++++++++++++++============ with NULL\t\n\n");
 			else printf("\nCONTEXT SWITCH WITH NOT NULL\n");       */ 
 			current[cpu_id] = pcb;
-			if(pcb!=NULL)
+			if(pcb!=NULL){
 			pcb->state=PROCESS_RUNNING;
+			if(pcb->prev_cpu_id!=cpu_id)
+				{
+					if( (pcb->prev_cpu_id!=10000 )&& (get_group_id(pcb->prev_cpu_id)!=get_group_id(cpu_id)) )
+					migration_cost+=LEVEL2_MIG_COST*(pcb->prev_vruntime/100.0);
+					pcb->prev_cpu_id=cpu_id;
+				}
+			}
 			pthread_mutex_unlock(&current_mutex);
 			context_switch(cpu_id,pcb,TIME_SLICE);
                    }
@@ -1078,12 +1084,11 @@ extern  void schedule(unsigned int cpu_id)
 			 {		
                                pcb = node->key;
 				pcb->state=PROCESS_RUNNING;
-				if(cpu_id!=pcb->prev_cpu_id)
+				if(pcb->prev_cpu_id!=cpu_id)
 				{
-					pcb->vruntime=0;
+					if( (pcb->prev_cpu_id!=10000 )&& (get_group_id(pcb->prev_cpu_id)!=get_group_id(cpu_id)) )
+					{migration_cost+=LEVEL2_MIG_COST*(pcb->prev_vruntime/100.0);pcb->prev_vruntime=pcb->vruntime;pcb->vruntime=0;}
 					pcb->prev_cpu_id=cpu_id;
-					migration_cost+=LEVEL2_MIG_COST;
-
 				}
 
 			}
@@ -1102,12 +1107,11 @@ extern  void schedule(unsigned int cpu_id)
 			 {		
                                pcb = node->key;
 				pcb->state=PROCESS_RUNNING;
-				if(cpu_id!=pcb->prev_cpu_id)
+				if(pcb->prev_cpu_id!=cpu_id)
 				{
-					pcb->vruntime=0;
+					if( (pcb->prev_cpu_id!=10000 )&& (get_group_id(pcb->prev_cpu_id)!=get_group_id(cpu_id)) )
+					{migration_cost+=LEVEL2_MIG_COST*(pcb->prev_vruntime/100.0);pcb->prev_vruntime=pcb->vruntime;pcb->vruntime=0;}
 					pcb->prev_cpu_id=cpu_id;
-					migration_cost+=LEVEL2_MIG_COST;
-
 				}
 
 			}
