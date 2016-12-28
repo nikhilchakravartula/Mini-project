@@ -818,7 +818,7 @@ static int find_idlest_core(unsigned int flag)
 
         for(i=0; i<NOC; i++)
             total_length += run_queue[i]->length;
-        if((float)((run_queue[core1]+1)->length*10)/(total_length+1) > optimum_core_load)
+        if( ( ( (run_queue[core1]->length)+1)*10)/((float)(total_length+1)) > optimum_core_load)
         {
             leastLength = INT_MAX;
             leastCore = INT_MAX;
@@ -833,7 +833,7 @@ static int find_idlest_core(unsigned int flag)
             }
             /*pthread_mutex_unlock(&run_mutex);*/
             core2 = leastCore;
-            if((float)((run_queue[core2]+1)->length*10)/(total_length+1) > optimum_core_load*0.5)
+            if( ( ( (run_queue[core2]->length)+1)*10)/((float)(total_length+1)) > optimum_core_load*0.5)
                 core = core2;
             else
                 core = core1;
@@ -979,8 +979,8 @@ extern  void schedule(unsigned int cpu_id)
 {
                 
         pcb_t *pcb = NULL;
-	struct QNode* node;
-	int i;
+	struct QNode* node=NULL;
+	int i,j,total_length=0;
 	int highest_utilized_core = INT_MIN;
 	int highest_length = INT_MIN;
              
@@ -1005,11 +1005,12 @@ extern  void schedule(unsigned int cpu_id)
 		    else
 		    {
 			pcb=NULL;
+			for(j=0;j<NOC;j++)total_length+=run_queue[j]->length;
 
 			for(i=0; i<NOC; i++)
 			{
-
-			    if(group_cores[i]==get_group_id(i) && run_queue[i]->length>highest_length)
+				
+			    if(group_cores[i]==get_group_id(i) && run_queue[i]->length>highest_length&& run_queue[i]->length/(float)total_length> optimum_core_load)
 			    {
 
 				highest_utilized_core = i;
@@ -1020,7 +1021,7 @@ extern  void schedule(unsigned int cpu_id)
 
 			}
 
-		
+			if(highest_utilized_core!=INT_MIN)
 			node = deQueueAtFront(run_queue[highest_utilized_core],0);
 
 			if(node!=NULL)
