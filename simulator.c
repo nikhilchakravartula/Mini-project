@@ -423,13 +423,10 @@ static void print_final_statistics(void)
     printf("\n\n======================================================================\n\n");
     for(i=0;i<cpu_count;i++)
     {
-        printf("IDLE: %d\t",cpus_data[i].num_cpu_idle);
+        printf("Utilisation: %.2f%%\t", 100*(cpus_data[i].num_cpu_busy)/((float)cpus_data[i].num_cpu_idle+cpus_data[i].num_cpu_busy));
     }
-    printf("\n");
-    for(i=0;i<cpu_count;i++)
-    {
-        printf("BUSY: %d\t",cpus_data[i].num_cpu_busy);
-    }
+printf("\n");
+print_migration_details();
 
 }
 

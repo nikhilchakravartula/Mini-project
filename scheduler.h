@@ -9,4 +9,5 @@ extern void yield(unsigned int cpu_id);
 extern void terminate(unsigned int cpu_id);
 extern void wake_up(pcb_t *process);
 extern void printQueues();
+extern void print_migration_details();
 #endif

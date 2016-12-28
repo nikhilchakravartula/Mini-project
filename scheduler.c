@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <limits.h>
 #define NOQ 3
-#define NOC 20
+#define NOC 4
 #define HIGH_LOWER 0
 #define HIGH_UPPER 5
 #define MEDIUM_LOWER 6
@@ -84,7 +84,7 @@ extern struct QNode *deQueueAtFront(struct Queue *q,int flag);
 
 extern void sorted_enqueue(struct Queue *q, pcb_t *p);
 
-
+extern void sorted_enqueue_priority(struct Queue *q, pcb_t *p);
 
 
 
@@ -301,9 +301,7 @@ extern void sorted_enqueue(struct Queue *q, pcb_t *p)
 {
 
     struct QNode *temp, *prv, *n;
-
-
-pthread_mutex_lock(&run_mutex);
+    pthread_mutex_lock(&run_mutex);
     n =newNode(p);
 /*printf("\nsorted_enqueue from %d\n",(int)pthread_self());*/
 
@@ -311,9 +309,8 @@ pthread_mutex_lock(&run_mutex);
     {
 
         q->front = q->rear = n;
-
         q->length++;
-pthread_mutex_unlock(&run_mutex);
+        pthread_mutex_unlock(&run_mutex);
 /*printf("\n\nFInished sorted Enqueue\n\n");*/
         return;
 
@@ -446,6 +443,156 @@ pthread_mutex_unlock(&run_mutex);
 
 
 
+extern void sorted_enqueue_priority(struct Queue *q, pcb_t *p)
+{
+
+    struct QNode *temp, *prv, *n;
+
+   pthread_mutex_lock(&ready_queue_mutex);
+    n =newNode(p);
+/*printf("\nsorted_enqueue from %d\n",(int)pthread_self());*/
+
+    if(q->front == NULL)
+    {
+
+        q->front = q->rear = n;
+
+        q->length++;
+   pthread_mutex_unlock(&ready_queue_mutex); 
+/*printf("\n\nFInished sorted Enqueue\n\n");*/
+        return;
+
+    }
+
+    temp = q->front;
+
+    while(temp!=q->rear)
+    {
+
+        if(temp->key->priority > p->priority)
+
+            break;
+
+        temp = temp->next;
+
+    }
+
+    if(temp == q->front)
+    {
+
+        if(temp->key->priority > p->priority)
+        {
+
+            temp->prev = n;
+
+            n->next = temp;
+
+            q->front = n;
+
+            q->length++;
+
+        }
+
+        else
+        {
+
+            prv = temp->next;
+
+            temp->next = n;
+
+            n->prev = temp;
+
+            if(temp == q->rear)
+            {
+
+                q->rear = n;
+
+            }
+
+            else
+            {
+
+                prv->prev = n;
+
+                n->next = prv;
+
+            }
+
+            q->length++;
+
+        }
+
+    }
+
+    else if(temp == q->rear)
+    {
+
+        if(q->rear->key->priority > p->priority)
+        {
+
+            prv = temp->prev;
+
+            prv->next = n;
+
+            n->prev = prv;
+
+            n->next = q->rear;
+
+            q->rear->prev = n;
+
+        }
+
+        else
+        {
+
+            q->rear->next = n;
+
+            n->prev = q->rear;
+
+            q->rear = n;
+
+        }
+
+        q->length++;
+
+    }/*
+
+    else if(temp == NULL){
+
+        q->rear->next = n;
+
+        n->prev = q->rear;
+
+        q->rear = n;
+
+        q->length++;
+
+    }*/
+
+    else if(temp!=NULL)
+    {
+
+        prv = temp->prev;
+
+        prv->next = n;
+
+        n->prev = prv;
+
+        n->next = temp;
+
+        temp->prev = n;
+
+        q->length++;
+
+    }
+
+  pthread_mutex_unlock(&ready_queue_mutex);
+ /*  pthread_mutex_unlock(&run_mutex);  */
+/*printf("\n\nfinished sorted enqueue\n\n");*/
+}
+
+
+
 
 /*======================================================================*/
 
@@ -571,6 +718,11 @@ static bool placeInQueue( pcb_t *pcb)
      return true; 
   } 
 
+  else if(SCHEDULING_TYPE==3)
+  {
+     sorted_enqueue_priority(ready_queue[0],pcb);    
+     return true;  
+  }
   return false;
 }
 
@@ -621,7 +773,10 @@ static int calculate_overall_load(){
 
 
 
-
+extern void print_migration_details()
+{
+	printf("\nMIGRATION COST\t %d\n\n",migration_cost);
+}
 
 static int find_idlest_core(unsigned int flag)
 
@@ -711,9 +866,10 @@ static void dispatch_process( pcb_t *pcb)
 
 
 
-	    if(core==pcb->prev_cpu_id){
+	    if(core!=pcb->prev_cpu_id){
 	    pcb->vruntime=0;
 	    pcb->prev_cpu_id = core;
+		migration_cost+=LEVEL2_MIG_COST;
 	    }
 	    sorted_enqueue(run_queue[core],pcb);
         
@@ -763,13 +919,58 @@ static void* schedule_next_process()
 
 
 extern  void wake_up( pcb_t *pcb)
-
 {
+    int flag = 0; 
+    int i;
 
-    pcb->state = PROCESS_READY;
+    if(SCHEDULING_TYPE==3)
+    {  
+       pthread_mutex_lock(&current_mutex);
+          for(i=0;i<NOC;i++)
+            { 
+               if(current[i]==NULL)
+		  {
+                    flag=1; 
+		    break;  	
+                  }
+            }
+ 
+          if(flag==1)
+	    {
+               pcb->state = PROCESS_READY;
+		       placeInQueue(pcb);    
+            }
 
-    placeInQueue(pcb);
-
+           else
+            {    
+		  for(i=0;i<NOC;i++)
+		    {
+		       if(current[i]->priority > pcb->priority)
+		          {
+		            flag=2;
+		            break;     
+			  } 
+		    }   
+		    if(flag==0)
+		    {
+		       pcb->state = PROCESS_READY;
+		       placeInQueue(pcb);  
+		    }
+		    
+		    if(flag==2)
+		    {
+		       force_preempt(i);	
+		       pcb->state = PROCESS_READY;   
+		       placeInQueue(pcb);
+		    }  
+             } 
+         pthread_mutex_unlock(&current_mutex);
+    }
+    else
+    {
+	  pcb->state = PROCESS_READY;
+	  placeInQueue(pcb);
+    }
 }
 
 
@@ -876,13 +1077,44 @@ extern  void schedule(unsigned int cpu_id)
 			 {		
                                pcb = node->key;
 				pcb->state=PROCESS_RUNNING;
+				if(cpu_id!=pcb->prev_cpu_id)
+				{
+					pcb->vruntime=0;
+					pcb->prev_cpu_id=cpu_id;
+					migration_cost+=LEVEL2_MIG_COST;
+
+				}
 
 			}
 		                current[cpu_id] = pcb;						
 				pthread_mutex_unlock(&current_mutex);
 				context_switch(cpu_id,pcb,-1);  
 		
-		   } 
+		   }
+                
+                  else if(SCHEDULING_TYPE==3)
+                   {
+			node = deQueueAtFront(ready_queue[0],1);
+			 pthread_mutex_lock(&current_mutex);
+			pcb=NULL;			
+			if(node!=NULL)	
+			 {		
+                               pcb = node->key;
+				pcb->state=PROCESS_RUNNING;
+				if(cpu_id!=pcb->prev_cpu_id)
+				{
+					pcb->vruntime=0;
+					pcb->prev_cpu_id=cpu_id;
+					migration_cost+=LEVEL2_MIG_COST;
+
+				}
+
+			}
+		                current[cpu_id] = pcb;						
+				pthread_mutex_unlock(&current_mutex);
+				context_switch(cpu_id,pcb,-1);  
+		
+		   }     
  
 }
 

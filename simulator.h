@@ -42,7 +42,7 @@ extern void start_simulator(unsigned int number_of_cpus);
 
 extern void context_switch(unsigned int cpu_id,pcb_t* pcb,int preemption_time);
 
-extern void force_preemption(unsigned int cpu_id);
+extern void force_preempt(unsigned int cpu_id);
 
 extern void safe_sleep(unsigned long seconds );
 
